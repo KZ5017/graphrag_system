@@ -1,0 +1,1 @@
+"""Qdrant vector projection adapter."""

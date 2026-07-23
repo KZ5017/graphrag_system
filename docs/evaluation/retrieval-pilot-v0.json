@@ -1,0 +1,62 @@
+[
+  {
+    "id": "R01",
+    "query": "Hogyan kérdezhetők le a MARUO végpontok Nemesisből?",
+    "expected_path": "Belső_tudásbázis/NOC/MARUO/MARUO_végpontok_lekérdezése_Nemesisből.md"
+  },
+  {
+    "id": "R02",
+    "query": "Hol ellenőrizhető egy PPPoE session egyedileg?",
+    "expected_path": "Belső_tudásbázis/NOC/MARUO/MARUO_végpontok_lekérdezése_Nemesisből.md"
+  },
+  {
+    "id": "R03",
+    "query": "Mi az SMTP tiltott ügyfél visszaengedésének folyamata?",
+    "expected_path": "Belső_tudásbázis/NOC/Folyamatok/SMTP-tiltott-ügyfelek-kezelése.md"
+  },
+  {
+    "id": "R04",
+    "query": "Mikor kell értesíteni az éjszakás vezénylésben?",
+    "expected_path": "Belső_tudásbázis/NOC/Műszak/éjszakás_vezénylés_feltételei.md"
+  },
+  {
+    "id": "R05",
+    "query": "Mi változott a vasárnapi munkavégzés és készenlét szabályaiban?",
+    "expected_path": "Belső_tudásbázis/NOC/Műszak/vasárnapi_munkavégzés_szabályok.md"
+  },
+  {
+    "id": "R06",
+    "query": "Hogyan indítható modem reset Nemesisből és hol látszik a log?",
+    "expected_path": "Eszközök/Szolgáltatói_eszközök/Végponti_eszközök/Koax_hálózat/Modem/Nemesisből_indított_modem_reset_logolása.md"
+  },
+  {
+    "id": "R07",
+    "query": "Hogyan kezelhető egy Huawei ONT?",
+    "expected_path": "Eszközök/Szolgáltatói_eszközök/Végponti_eszközök/Optikai_hálózat/huawei-ont-k-kezelési-utmutato.md"
+  },
+  {
+    "id": "R08",
+    "query": "Hogyan kell üzembe helyezni a Xiaomi TV Box S eszközt?",
+    "expected_path": "Belső_tudásbázis/NOC/Helpdesk/AndroidTV_Box/Xiaomi_TV_Box_S_Uzembehelyezés.md"
+  },
+  {
+    "id": "R09",
+    "query": "Milyen módjai és eszközei vannak a helyi AI Asszisztensnek?",
+    "expected_path": "Belső_tudásbázis/Saját_fejlesztésű_rendszerek/Helyi_AI_Asszisztens/Módok_és_eszközök.md"
+  },
+  {
+    "id": "R10",
+    "query": "Milyen adatkezelési és kontextuskorlátai vannak a helyi AI Asszisztensnek?",
+    "expected_path": "Belső_tudásbázis/Saját_fejlesztésű_rendszerek/Helyi_AI_Asszisztens/Korlátok_és_adatkezelés.md"
+  },
+  {
+    "id": "R11",
+    "query": "Hogyan lehet hibajegyet rögzíteni a WOP MARUO felületén?",
+    "expected_path": "Belső_tudásbázis/NOC/MARUO/WOP_felhasználói_kézikönyv.md"
+  },
+  {
+    "id": "R12",
+    "query": "Hogyan állítható be hívásátirányítás Android telefonon?",
+    "expected_path": "Belső_tudásbázis/NOC/Helpdesk/Mobiltelefon/Hívásátirányítás/Android/hivas_atiranyitas_android.md"
+  }
+]

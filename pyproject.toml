@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphrag-knowledge-service"
+version = "0.1.0"
+description = "Local, auditable GraphRAG knowledge service for read-only Obsidian vaults"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "GraphRAG Knowledge Service contributors" }]
+dependencies = [
+  "alembic>=1.14,<2",
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "marko>=2.2,<3",
+  "neo4j>=5.27,<7",
+  "psycopg[binary,pool]>=3.2,<4",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "pyyaml>=6,<7",
+  "sqlalchemy[asyncio]>=2.0.36,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "pytest-cov>=6,<8",
+  "httpx2>=2,<3",
+  "ruff>=0.9,<1",
+]
+
+[project.scripts]
+graphrag-api = "graphrag_service.api.cli:main"
+graphrag-worker = "graphrag_service.workers.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "integration: requires dedicated external services",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "RUF"]
+

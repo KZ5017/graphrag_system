@@ -1,0 +1,163 @@
+name: graphrag-knowledge-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${GKS_POSTGRES_DB:-graphrag}
+      POSTGRES_USER: ${GKS_POSTGRES_USER:-graphrag}
+      POSTGRES_PASSWORD: ${GKS_POSTGRES_PASSWORD:?set GKS_POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${GKS_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.5
+    ports:
+      - "127.0.0.1:${GKS_QDRANT_HTTP_PORT:-6433}:6333"
+      - "127.0.0.1:${GKS_QDRANT_GRPC_PORT:-6434}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c ': >/dev/tcp/127.0.0.1/6333'",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.26-community
+    environment:
+      NEO4J_AUTH: neo4j/${GKS_NEO4J_PASSWORD:?set GKS_NEO4J_PASSWORD}
+      GKS_NEO4J_PASSWORD: ${GKS_NEO4J_PASSWORD:?set GKS_NEO4J_PASSWORD}
+      NEO4J_server_memory_heap_initial__size: ${GKS_NEO4J_HEAP_INITIAL:-512m}
+      NEO4J_server_memory_heap_max__size: ${GKS_NEO4J_HEAP_MAX:-1G}
+      NEO4J_server_memory_pagecache_size: ${GKS_NEO4J_PAGECACHE:-512m}
+    ports:
+      - "127.0.0.1:${GKS_NEO4J_HTTP_PORT:-7474}:7474"
+      - "127.0.0.1:${GKS_NEO4J_BOLT_PORT:-7687}:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -u neo4j -p \"$${GKS_NEO4J_PASSWORD}\" 'RETURN 1' >/dev/null",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+    command: ["alembic", "upgrade", "head"]
+    environment: &application-environment
+      GKS_ENVIRONMENT: ${GKS_ENVIRONMENT:-development}
+      GKS_LOG_LEVEL: ${GKS_LOG_LEVEL:-INFO}
+      GKS_SERVICE_TOKEN: ${GKS_SERVICE_TOKEN:?set GKS_SERVICE_TOKEN}
+      GKS_POSTGRES_DSN: postgresql+psycopg://${GKS_POSTGRES_USER:-graphrag}:${GKS_POSTGRES_PASSWORD}@postgres:5432/${GKS_POSTGRES_DB:-graphrag}
+      GKS_VAULT_ALLOWED_ROOTS: "[\"/vaults/primary\"]"
+      GKS_MAX_MARKDOWN_NOTE_BYTES: 20971520
+      GKS_QDRANT_URL: http://qdrant:6333
+      GKS_NEO4J_URI: bolt://neo4j:7687
+      GKS_NEO4J_USERNAME: neo4j
+      GKS_NEO4J_PASSWORD: ${GKS_NEO4J_PASSWORD}
+      GKS_NEO4J_DATABASE: neo4j
+      GKS_GENERATION_PROVIDER_ENABLED: ${GKS_GENERATION_PROVIDER_ENABLED:-false}
+      GKS_GENERATION_PROVIDER_URL: ${GKS_GENERATION_PROVIDER_URL:-http://host.docker.internal:1234/v1}
+      GKS_GENERATION_MODEL: ${GKS_GENERATION_MODEL:-qwen/qwen3.5-9b}
+      GKS_GENERATION_REASONING_EFFORT: ${GKS_GENERATION_REASONING_EFFORT:-none}
+      GKS_GENERATION_TIMEOUT_SECONDS: ${GKS_GENERATION_TIMEOUT_SECONDS:-180}
+      GKS_GENERATION_MAX_TOKENS: ${GKS_GENERATION_MAX_TOKENS:-4096}
+      GKS_EXTRACTION_MAX_CHUNKS_PER_JOB: ${GKS_EXTRACTION_MAX_CHUNKS_PER_JOB:-20}
+      GKS_GENERATION_PROVIDER_API_KEY: ${GKS_GENERATION_PROVIDER_API_KEY:-}
+      GKS_EMBEDDING_PROVIDER_ENABLED: ${GKS_EMBEDDING_PROVIDER_ENABLED:-false}
+      GKS_EMBEDDING_PROVIDER_URL: ${GKS_EMBEDDING_PROVIDER_URL:-http://host.docker.internal:1234/v1}
+      GKS_EMBEDDING_PROVIDER_API_KEY: ${GKS_EMBEDDING_PROVIDER_API_KEY:-}
+      GKS_EMBEDDING_MODEL: ${GKS_EMBEDDING_MODEL:-text-embedding-bge-m3}
+      GKS_EMBEDDING_BATCH_SIZE: ${GKS_EMBEDDING_BATCH_SIZE:-16}
+      GKS_PROJECTION_BATCH_SIZE: ${GKS_PROJECTION_BATCH_SIZE:-16}
+      GKS_GRAPH_PROJECTION_MAX_OBJECTS: ${GKS_GRAPH_PROJECTION_MAX_OBJECTS:-20000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+    command: ["graphrag-api"]
+    environment:
+      <<: *application-environment
+      GKS_API_HOST: 0.0.0.0
+      GKS_API_PORT: 8080
+      GKS_ALLOW_NON_LOOPBACK_BIND: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:${GKS_API_PORT:-8080}:8080"
+    volumes:
+      - "${GKS_VAULT_HOST_PATH:-/mnt/d/hack/MCP_Test_ObsidianVault}:/vaults/primary:ro"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+    command: ["graphrag-worker"]
+    environment:
+      <<: *application-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "${GKS_VAULT_HOST_PATH:-/mnt/d/hack/MCP_Test_ObsidianVault}:/vaults/primary:ro"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  neo4j_data:
+  neo4j_logs:
+
