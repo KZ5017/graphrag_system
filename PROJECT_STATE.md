@@ -43,6 +43,19 @@ query now returns four night-duty sources and no SMTP, Helpdesk, entity, claim,
 relationship, or path noise. A reasoning-disabled end-to-end Assistant run
 produced a source-grounded night-duty answer without unrelated instructions.
 
+A retrieval most dokumentum-koherencia bővítést is alkalmaz: ha az erős
+keyword–semantic konszenzuskapu után pontosan egyetlen nem-index dokumentum
+marad jelöltként, a rendszer az aktuális dokumentumverzió releváns
+fejezetfájának leszármazott chunkjait is hidratálja, dokumentumonként legfeljebb
+32 chunkkal és összesen 30 000 karakterrel. Többértelmű, többdokumentumos
+helyzetben a bővítés nem indul el. A rangsorolt találatok precíziós kapuja
+változatlan maradt. Az Android hívásátirányítási kérdés fájlnév nélkül 2
+rangsorolt találat mellé a teljes útmutató 22 további szakaszát kapta meg,
+idegen vagy SMTP-forrás nélkül. A reasoning nélküli Assistant smoke teljes,
+forráshivatkozott beállítási választ adott APN-, telefonszám-, ellenőrzési és
+hibaelhárítási lépésekkel.
+adott APN-, telefonszám-, ellenőrzési és hibaelhárítási lépésekkel.
+
 A helyi operátori dashboard a /operator útvonalon elkészült. A tokenvédett
 operátori API kanonikus állapotösszesítést, read-only vault-diff előnézetet,
 dokumentumlistát és tartós pending-refresh állapotot ad. A felület a meglévő
@@ -313,7 +326,7 @@ Latest verified gates:
 
 - Ruff format: clean
 - Ruff lint: clean
-- Unit tests: 62 passed
+- Unit tests: 64 passed
 - Integration tests: 7 passed
 - `pip check`: clean
 - Alembic current: `0008_scope_identifiers_by_vault`
@@ -400,10 +413,11 @@ See docs/open-questions.md and docs/implementation/roadmap.md.
 1. Extend the reviewed retrieval corpus with positive, negative,
    insufficient-source and topic-overlap cases over the current graph.
 2. Turn the Kiskőrös/SMTP precision defect into a permanent acceptance case.
-3. Add operator workflow integration coverage for scan, projection, extraction,
+3. Turn the Android document-coherence case into a permanent acceptance case.
+4. Add operator workflow integration coverage for scan, projection, extraction,
    resolution, rebuild, interruption and page reload.
-4. Add a version-pinned compatibility test for the Assistant retrieval client.
-5. Keep broad whole-vault extraction blocked until precision is reviewed.
+5. Add a version-pinned compatibility test for the Assistant retrieval client.
+6. Keep broad whole-vault extraction blocked until precision is reviewed.
 
 ## Fresh-session checklist
 

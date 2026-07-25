@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import PurePosixPath
 from time import perf_counter
 from uuid import UUID
 
@@ -44,6 +45,9 @@ class Phase5RetrievalService:
         max_limit: int,
         rrf_k: int,
         chunks_alias: str,
+        document_context_max_documents: int = 1,
+        document_context_max_chunks_per_document: int = 32,
+        document_context_max_chars: int = 30000,
     ) -> None:
         self._store = store
         self._projection_store = projection_store
@@ -56,6 +60,9 @@ class Phase5RetrievalService:
         self._max_limit = max_limit
         self._rrf_k = rrf_k
         self._chunks_alias = chunks_alias
+        self._document_context_max_documents = document_context_max_documents
+        self._document_context_max_chunks_per_document = document_context_max_chunks_per_document
+        self._document_context_max_chars = document_context_max_chars
 
     async def retrieve(
         self,
@@ -183,15 +190,43 @@ class Phase5RetrievalService:
         ranked = self._rank(strategy, keyword, semantic, channels, all_chunks)
         truncated = len(ranked) > limit or graph.truncated or claim_truncated or precision_filtered
         ranked = ranked[:limit]
+        document_seed_candidates = [
+            item
+            for item in ranked
+            if item.chunk_id in consensus_ids and not _is_navigation_document(item.relative_path)
+        ]
+        candidate_document_ids = {item.document_id for item in document_seed_candidates}
+        document_seed_ids = (
+            [item.chunk_id for item in document_seed_candidates]
+            if len(candidate_document_ids) == 1
+            else []
+        )
+        document_context, document_context_truncated = await self._store.document_context(
+            document_seed_ids,
+            max_documents=self._document_context_max_documents,
+            max_chunks_per_document=self._document_context_max_chunks_per_document,
+            max_total_chars=self._document_context_max_chars,
+        )
+        truncated = truncated or document_context_truncated
         section_context = await self._store.section_context(
             [item.chunk_id for item in ranked],
             neighbor_window=1,
         )
         ranked_ids = {item.chunk_id for item in ranked}
         context_by_id = {
-            item.chunk_id: item for item in section_context if item.chunk_id not in ranked_ids
+            item.chunk_id: item
+            for item in [*document_context, *section_context]
+            if item.chunk_id not in ranked_ids
         }
-        context_chunks = list(context_by_id.values())
+        context_chunks = sorted(
+            context_by_id.values(),
+            key=lambda item: (
+                item.relative_path.casefold(),
+                item.char_start,
+                item.char_end,
+                str(item.chunk_id),
+            ),
+        )
         active_source_ids = ranked_ids | set(context_by_id)
         relationships = tuple(
             item for item in graph.relationships if item.source_chunk_id in active_source_ids
@@ -394,3 +429,8 @@ def _primary_consensus_ids(
 
 def _has_explicit_entity_anchor(expansion: GraphRetrievalExpansion) -> bool:
     return any("entity" in item.seed_channels and item.score >= 1.0 for item in expansion.entities)
+
+
+def _is_navigation_document(relative_path: str) -> bool:
+    stem = PurePosixPath(relative_path.replace("\\", "/")).stem.casefold()
+    return stem == "index" or stem.endswith("-index") or stem.endswith("_index")

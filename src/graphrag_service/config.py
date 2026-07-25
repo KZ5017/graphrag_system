@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     retrieval_claim_limit: int = Field(default=20, ge=1, le=100)
     retrieval_graph_max_hops: int = Field(default=2, ge=1, le=4)
     retrieval_graph_max_paths: int = Field(default=20, ge=1, le=50)
+    retrieval_document_context_max_documents: int = Field(default=1, ge=1, le=10)
+    retrieval_document_context_max_chunks_per_document: int = Field(default=32, ge=1, le=100)
+    retrieval_document_context_max_chars: int = Field(default=30000, ge=1000, le=200000)
 
     readiness_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     worker_id: str | None = None

@@ -156,10 +156,15 @@ class FakeRetrievalStore:
         keyword: RetrievalChunk | list[RetrievalChunk],
         semantic: RetrievalChunk | list[RetrievalChunk],
         claims: list[tuple[RetrievalClaim, RetrievalChunk]] | None = None,
+        document_context: list[RetrievalChunk] | None = None,
+        document_context_truncated: bool = False,
     ) -> None:
         self.keyword = keyword if isinstance(keyword, list) else [keyword]
         self.semantic = semantic if isinstance(semantic, list) else [semantic]
         self.claims = claims or []
+        self.document_context_items = document_context or []
+        self.document_context_truncated = document_context_truncated
+        self.document_context_seed_ids: list[UUID] = []
         self.audit: dict[str, object] | None = None
 
     async def keyword_search(self, *_: object, **__: object) -> list[RetrievalChunk]:
@@ -170,6 +175,14 @@ class FakeRetrievalStore:
 
     async def section_context(self, *_: object, **__: object) -> list[RetrievalChunk]:
         return []
+
+    async def document_context(
+        self, seed_ids: list[UUID], **__: object
+    ) -> tuple[list[RetrievalChunk], bool]:
+        self.document_context_seed_ids = seed_ids
+        if not seed_ids:
+            return [], False
+        return self.document_context_items, self.document_context_truncated
 
     async def claim_candidates(
         self, *_: object, **__: object
@@ -442,6 +455,132 @@ async def test_phase5_filters_generic_entity_smtp_branch_from_consensus_evidence
     assert result.claims == ()
     assert result.retrieval_paths == ()
     assert result.truncated is True
+
+
+async def test_phase5_expands_only_consensus_document_context_and_skips_index() -> None:
+    vault_id = uuid4()
+    document_id = uuid4()
+    document_version_id = uuid4()
+    guide_root = replace(
+        make_chunk(uuid4(), "Hívásátirányítás beállítása Android telefonon"),
+        vault_id=vault_id,
+        document_id=document_id,
+        document_version_id=document_version_id,
+        relative_path="helpdesk/hivas_atiranyitas_android.md",
+        heading_path=("Hívásátirányítás beállítása Android telefonon",),
+    )
+    guide_step = replace(
+        make_chunk(uuid4(), "A HOS APN típusa xcap."),
+        vault_id=vault_id,
+        document_id=document_id,
+        document_version_id=document_version_id,
+        relative_path=guide_root.relative_path,
+        heading_path=(
+            "Hívásátirányítás beállítása Android telefonon",
+            "Előkészületek",
+        ),
+    )
+    index = replace(
+        make_chunk(uuid4(), "Android hívásátirányítás útmutató"),
+        vault_id=vault_id,
+        relative_path="00-INDEX.md",
+        heading_path=("Tudásbázis", "Android"),
+    )
+    unrelated = replace(
+        make_chunk(uuid4(), "SPAM ticket és e-mail tiltás"),
+        vault_id=vault_id,
+        relative_path="smtp-blocking.md",
+    )
+    store = FakeRetrievalStore(
+        keyword=[guide_root, index],
+        semantic=[guide_root, index, unrelated],
+        document_context=[guide_step],
+    )
+    service = Phase5RetrievalService(
+        store=store,  # type: ignore[arg-type]
+        projection_store=FakeProjectionStore(),  # type: ignore[arg-type]
+        vector_index=FakeVectorIndex(
+            [
+                (guide_root.chunk_id, 0.95),
+                (index.chunk_id, 0.94),
+                (unrelated.chunk_id, 0.70),
+            ]
+        ),  # type: ignore[arg-type]
+        embedding_provider=FakeEmbeddingProvider(),
+        query_planner=DeterministicQueryPlanner(),
+        graph_enricher=FakeEnricher(GraphRetrievalExpansion((), (), (), (), (), False)),  # type: ignore[arg-type]
+        candidate_limit=10,
+        claim_limit=20,
+        max_limit=20,
+        rrf_k=60,
+        chunks_alias="active",
+    )
+
+    result = await service.retrieve(
+        "Segíts hívásátirányítást beállítani Android mobilon",
+        strategy="hybrid",
+        limit=10,
+        vault_id=vault_id,
+    )
+
+    assert [item.chunk_id for item in result.chunks] == [
+        guide_root.chunk_id,
+        index.chunk_id,
+    ]
+    assert store.document_context_seed_ids == [guide_root.chunk_id]
+    assert result.context_chunks == (guide_step,)
+    assert unrelated.chunk_id not in {
+        item.chunk_id for item in [*result.chunks, *result.context_chunks]
+    }
+
+
+async def test_phase5_does_not_expand_ambiguous_multiple_documents() -> None:
+    vault_id = uuid4()
+    first = replace(
+        make_chunk(uuid4(), "Android hívásátirányítás"),
+        vault_id=vault_id,
+        relative_path="android-guide.md",
+    )
+    second = replace(
+        make_chunk(uuid4(), "Android mobiltelefon beállítása"),
+        vault_id=vault_id,
+        relative_path="other-guide.md",
+    )
+    context = replace(
+        make_chunk(uuid4(), "Részletes beállítási lépések"),
+        vault_id=vault_id,
+        document_id=first.document_id,
+        document_version_id=first.document_version_id,
+        relative_path=first.relative_path,
+    )
+    store = FakeRetrievalStore(
+        keyword=[first, second],
+        semantic=[first, second],
+        document_context=[context],
+    )
+    service = Phase5RetrievalService(
+        store=store,  # type: ignore[arg-type]
+        projection_store=FakeProjectionStore(),  # type: ignore[arg-type]
+        vector_index=FakeVectorIndex([(first.chunk_id, 0.95), (second.chunk_id, 0.94)]),  # type: ignore[arg-type]
+        embedding_provider=FakeEmbeddingProvider(),
+        query_planner=DeterministicQueryPlanner(),
+        graph_enricher=FakeEnricher(GraphRetrievalExpansion((), (), (), (), (), False)),  # type: ignore[arg-type]
+        candidate_limit=10,
+        claim_limit=20,
+        max_limit=20,
+        rrf_k=60,
+        chunks_alias="active",
+    )
+
+    result = await service.retrieve(
+        "Android mobiltelefon beállítása",
+        strategy="hybrid",
+        limit=10,
+        vault_id=vault_id,
+    )
+
+    assert store.document_context_seed_ids == []
+    assert result.context_chunks == ()
 
 
 def test_deterministic_planner_is_small_model_independent() -> None:

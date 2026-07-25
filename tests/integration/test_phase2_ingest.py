@@ -12,6 +12,7 @@ from graphrag_service.adapters.postgres.ingest_models import (
     DocumentVersionModel,
 )
 from graphrag_service.adapters.postgres.ingest_store import PostgresIngestStore
+from graphrag_service.adapters.postgres.retrieval_store import RetrievalStore
 from graphrag_service.adapters.postgres.session import (
     create_engine,
     create_session_factory,
@@ -44,7 +45,12 @@ async def test_phase2_incremental_lifecycle_and_read_only_acceptance(
     run_alembic("downgrade", settings.postgres_dsn)
     run_alembic("upgrade", settings.postgres_dsn)
     note = tmp_path / "knowledge.md"
-    note.write_text("# Hálózat\n\nA CMTS [[ONT]] eszközt szolgál ki.\n", encoding="utf-8")
+    note.write_text(
+        "# Hálózat\n\nÁttekintés az eljárásról.\n\n"
+        "## Előkészítés\n\nAz ONT előkészítése.\n\n"
+        "## Beállítás\n\nA CMTS [[ONT]] eszközt szolgál ki.\n",
+        encoding="utf-8",
+    )
     before = snapshot(tmp_path)
 
     settings = settings.model_copy(update={"vault_allowed_roots": [str(tmp_path)]})
@@ -79,6 +85,21 @@ async def test_phase2_incremental_lifecycle_and_read_only_acceptance(
         assert chunk_count and chunk_count > 0
         chunks = (await session.scalars(select(ChunkModel))).all()
         assert all(chunk.text for chunk in chunks)
+
+        retrieval_store = RetrievalStore(sessions)
+        hydrated = await retrieval_store.hydrate_current([chunk.id for chunk in chunks])
+        root_chunk = next(item for item in hydrated.values() if len(item.heading_path) == 1)
+        document_context, context_truncated = await retrieval_store.document_context(
+            [root_chunk.chunk_id],
+            max_documents=1,
+            max_chunks_per_document=10,
+            max_total_chars=10000,
+        )
+        assert [item.heading_path[-1] for item in document_context] == [
+            "Előkészítés",
+            "Beállítás",
+        ]
+        assert context_truncated is False
 
     unchanged = await service.scan(vault.id, ScanType.INCREMENTAL)
     assert unchanged.result.hashed_count == 0

@@ -24,7 +24,8 @@ tartalmazza:
   reconciliation;
 - keyword, semantic és determinisztikus RRF hybrid retrieval;
 - PostgreSQL current-version visszaellenőrzés, exact provenance és
-  section-aware szomszédos context chunkok;
+- section-aware szomszédos context chunkok, valamint erős hybrid konszenzushoz
+  kötött, nem-index dokumentumokon belüli korlátos fejezetfa-hidratálás;
 - retrieval query audit és verziózott pilot evaluation corpus;
 - kontrollált telecom-core@0.1 PostgreSQL ontológia registry;
 - külön GenerationProvider port és LM Studio Qwen structured-output adapter;

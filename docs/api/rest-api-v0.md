@@ -198,9 +198,13 @@ A Phase 5 implementált kérésmezői: `query`, `strategy` (`keyword`,
 stratégia determinisztikus query plannert, entity/vector seedeket, korlátos
 Neo4j bejárást és claim retrievalt használ. Minden assertion, claim és path
 csak aktuális PostgreSQL exact evidence-hidratálás után kerülhet a válaszba.
-A `context_chunks` az azonos szakasz szomszédait és a szemantikus eredményeket
-alátámasztó source chunkokat hordozza. A végpont nem készít végső természetes
-nyelvű választ.
+A `context_chunks` az azonos szakasz szomszédait, a szemantikus eredményeket
+alátámasztó source chunkokat, továbbá kizárólag erős keyword–semantic
+konszenzussal elfogadott, nem-index dokumentumok releváns fejezetfájának
+korlátos leszármazott chunkjait hordozza. A bővítés csak akkor indul, ha
+pontosan egyetlen nem-index dokumentum marad konszenzusos jelölt; többdokumentumos
+helyzetben letilt. Az alap korlát 1 dokumentum, dokumentumonként 32 chunk és
+összesen 30 000 karakter. Csak az aktuális forrásverzió hidratálható.
 
 ```json
 {

@@ -238,6 +238,8 @@ Az Assistant és a GraphRAG külön indítható és állítható le.
 
 - bővített, review-zott pozitív és negatív retrieval corpus a frissített gráfon;
 - a Kiskőrös/SMTP relevancia-regresszió tartós acceptance esetté alakítása;
+- az Android hívásátirányítási útmutató dokumentum-koherencia regressziójának
+  tartós acceptance esetté alakítása, idegen dokumentum bővítése nélkül;
 - operator workflow integration tesztek a scan → projection → extraction →
   resolution/rebuild állapotátmenetekre;
 - stale, törölt és átnevezett források dashboard- és retrieval-regressziója;

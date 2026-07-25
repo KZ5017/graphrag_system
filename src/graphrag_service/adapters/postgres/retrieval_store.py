@@ -131,6 +131,80 @@ class RetrievalStore:
             ).all()
         return [self._to_chunk(row) for row in rows]
 
+    async def document_context(
+        self,
+        seed_ids: list[UUID],
+        *,
+        max_documents: int,
+        max_chunks_per_document: int,
+        max_total_chars: int,
+    ) -> tuple[list[RetrievalChunk], bool]:
+        """Hydrate bounded descendants of already accepted document sections."""
+        if not seed_ids or max_documents < 1 or max_chunks_per_document < 1 or max_total_chars < 1:
+            return [], False
+
+        async with self._sessions() as session:
+            seed_rows = (
+                await session.execute(
+                    self._current_chunk_query().where(ChunkModel.id.in_(seed_ids))
+                )
+            ).all()
+            seeds_by_id = {row[0].id: row for row in seed_rows}
+            document_ranges: dict[UUID, list[tuple[int, int]]] = {}
+            version_by_document: dict[UUID, UUID] = {}
+            for seed_id in seed_ids:
+                row = seeds_by_id.get(seed_id)
+                if row is None:
+                    continue
+                _, section, version, document, _ = row[:5]
+                document_ranges.setdefault(document.id, []).append(
+                    (section.char_start, section.char_end)
+                )
+                version_by_document[document.id] = version.id
+
+            selected_documents = list(document_ranges)[:max_documents]
+            truncated = len(document_ranges) > max_documents
+            result: list[RetrievalChunk] = []
+            result_ids: set[UUID] = set(seed_ids)
+            total_chars = 0
+
+            for document_id in selected_documents:
+                ranges = document_ranges[document_id]
+                conditions = [
+                    and_(
+                        ChunkModel.char_start >= char_start,
+                        ChunkModel.char_end <= char_end,
+                    )
+                    for char_start, char_end in ranges
+                ]
+                rows = (
+                    await session.execute(
+                        self._current_chunk_query()
+                        .where(
+                            DocumentVersionModel.id == version_by_document[document_id],
+                            or_(*conditions),
+                            ChunkModel.id.not_in(seed_ids),
+                        )
+                        .order_by(ChunkModel.ordinal, ChunkModel.id)
+                        .limit(max_chunks_per_document + 1)
+                    )
+                ).all()
+                if len(rows) > max_chunks_per_document:
+                    truncated = True
+                for row in rows[:max_chunks_per_document]:
+                    chunk = self._to_chunk(row)
+                    if chunk.chunk_id in result_ids:
+                        continue
+                    chunk_chars = len(chunk.text)
+                    if total_chars + chunk_chars > max_total_chars:
+                        truncated = True
+                        return result, truncated
+                    result.append(chunk)
+                    result_ids.add(chunk.chunk_id)
+                    total_chars += chunk_chars
+
+        return result, truncated
+
     async def record_query(
         self,
         *,

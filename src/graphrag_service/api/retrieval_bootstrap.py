@@ -58,4 +58,9 @@ def configure_retrieval(app: FastAPI, settings: Settings) -> None:
         max_limit=settings.retrieval_max_limit,
         rrf_k=settings.retrieval_rrf_k,
         chunks_alias=settings.qdrant_chunks_alias,
+        document_context_max_documents=settings.retrieval_document_context_max_documents,
+        document_context_max_chunks_per_document=(
+            settings.retrieval_document_context_max_chunks_per_document
+        ),
+        document_context_max_chars=settings.retrieval_document_context_max_chars,
     )
