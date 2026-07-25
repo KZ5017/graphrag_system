@@ -14,8 +14,10 @@ def settings_factory() -> Callable[..., Settings]:
             "environment": "test",
             "service_token": "unit-test-service-token-32-characters",
             "neo4j_password": "unit-test-neo4j-password",
+            "generation_provider_enabled": False,
+            "embedding_provider_enabled": False,
         }
         values.update(overrides)
-        return Settings(**values)  # type: ignore[arg-type]
+        return Settings(_env_file=None, **values)  # type: ignore[arg-type]
 
     return factory

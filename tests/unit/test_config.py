@@ -22,9 +22,12 @@ def test_non_loopback_bind_requires_explicit_opt_in(settings_factory) -> None:
 
 def test_secrets_are_required_and_excluded_from_safe_summary() -> None:
     with pytest.raises(ValidationError):
-        Settings(neo4j_password="long-enough-password")  # type: ignore[call-arg]
+        Settings(  # type: ignore[call-arg]
+            _env_file=None, neo4j_password="long-enough-password"
+        )
 
     settings = Settings(
+        _env_file=None,
         service_token="a-service-token-that-is-long-enough",
         neo4j_password="a-neo4j-password",
     )

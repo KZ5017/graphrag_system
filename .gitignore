@@ -6,6 +6,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+.runtime/
 .mypy_cache/
 .coverage
 coverage.xml

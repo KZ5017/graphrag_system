@@ -165,13 +165,24 @@ docs/evaluation/graph-pilot-v0-baseline-2026-07-24.md.
 
 ## Fázis 5 – GraphRAG retrieval
 
+**Állapot:** lezárva, valós PostgreSQL + Qdrant + Neo4j adaton és lokális
+LM Studio embeddinggel ellenőrizve (2026-07-24).
+
+Ellenőrzött: determinisztikus query classification, canonical entity és vector
+seed, legfeljebb 4 hopos/50 pathos Neo4j bejárás, active current-source
+PostgreSQL assertion/claim hydration, stale path fail-closed szűrés,
+determinisztikus keyword/vector/entity/graph/claim RRF, source retention,
+warning/truncation és containeres provenance-regresszió. A négyes review-zott
+baseline 4/4 esetet teljesített, köztük egy igazolt kétlépéses gráfutat.
+
 ### Szállítandó
 
-- query classification;
+- determinisztikus query classification;
 - entity seed retrieval;
 - vector seed és graph expansion;
 - deterministic fusion;
 - path- és source-kiválasztás;
+- aktuális forráshoz kötött assertion- és claim-hidratálás;
 - strukturált retrieval response;
 - relevancia- és provenance-regressziós tesztek.
 
@@ -182,24 +193,63 @@ docs/evaluation/graph-pilot-v0-baseline-2026-07-24.md.
 - warning és truncation látható;
 - `confidence` csak kalibrált módszerrel kap értéket.
 
+Baseline:
+`docs/evaluation/graphrag-retrieval-v1-baseline-2026-07-24.md`.
+
+## Üzemeltetési kiegészítés – helyi GraphRAG kezelő
+
+**Állapot:** megvalósítva, unit és élő smoke szinten ellenőrizve (2026-07-25).
+
+A loopbacken elérhető, service tokennel vezérelt operátori oldal megmutatja a
+komponensek, a vault, a Qdrant projection és a kanonikus gráf állapotát.
+Írásmentes diff-előnézetből indítható scan, embedding projection, dokumentumra
+korlátozott extraction, resolution és Neo4j-rebuild. A lépések tartós jobok,
+a vault továbbra is read-only.
+A legutóbbi, még nem Neo4j-projektált scan feldolgozási listája PostgreSQL
+auditból visszaállítható, ezért a külön futtatott lépések és az oldal újranyitása
+nem veszítik el a dokumentumscope-ot. A dokumentumkijelölés, a gráfépítésre váró
+extraction futások és a művelet nélküli jobnapló külön panelen jelennek meg.
+
 ## Fázis 6 – Assistant integráció
 
-### Szállítandó
+**Állapot:** megvalósítva és két-rendszeres élő smoke-kal ellenőrizve
+(2026-07-25). A fogyasztóoldali implementáció a sibling
+/home/bober/projects/AI_Assistant repositoryban található.
 
-- stabil OpenAPI contract;
-- klienspélda;
-- `127.0.0.1` binding;
-- service token;
-- timeout, retry és rate/size limitek;
-- AI Assistant integration test;
-- későbbi MCP adapterhez application service határ.
+Ellenőrzött: explicit user által választott GraphRAG mód, minden kérdésnél
+determinista hybrid POST /v1/retrieve hívás, service-token hitelesítés, teljes
+típusos response-validáció, timeout és válaszméret-korlát, forráscímkézett
+evidence csomagolás, safe provenance, reasoninggel való kombinálhatóság,
+MCP-módokkal való kölcsönös kizárás és silent fallback nélküli hibakezelés.
+Az Assistant és a GraphRAG külön indítható és állítható le.
 
-### Nem része automatikusan
+### Nem része
 
-- kész GraphRAG végső válaszgenerálás;
+- végső válaszgenerálás a GraphRAG szolgáltatáson belül;
 - Obsidian plugin;
 - vault write-back;
 - többtenant adminrendszer.
+
+## Fázis 7 – Retrieval-minőség és üzemeltetési megerősítés
+
+**Állapot:** következő mérföldkő.
+
+### Tervezett scope
+
+- bővített, review-zott pozitív és negatív retrieval corpus a frissített gráfon;
+- a Kiskőrös/SMTP relevancia-regresszió tartós acceptance esetté alakítása;
+- operator workflow integration tesztek a scan → projection → extraction →
+  resolution/rebuild állapotátmenetekre;
+- stale, törölt és átnevezett források dashboard- és retrieval-regressziója;
+- retrieval response contract kompatibilitási teszt az Assistant kliensével;
+- mért whole-vault precision a broad extraction scope további bővítése előtt.
+
+### Kilépési feltétel
+
+- a review-zott negatív esetek nem szivárogtatnak témán kívüli forrást;
+- az operátori workflow megszakítás után, oldalfrissítéssel is folytatható;
+- a GraphRAG és az Assistant contract eltérése tesztben bukik;
+- nincs broad extraction ember által jóváhagyott scope és mérés nélkül.
 
 ## Minőségi kapuk
 

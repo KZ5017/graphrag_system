@@ -1,6 +1,6 @@
 # GraphRAG Knowledge Service – project state
 
-Last updated: 2026-07-24  
+Last updated: 2026-07-25
 Repository target: `https://github.com/KZ5017/graphrag_system.git`
 
 This is the durable handoff snapshot. It describes what is implemented, what
@@ -24,7 +24,43 @@ Phases 0–3 are complete. The Phase 4 core is implemented:
 - real read-only vault extraction/resolution/projection baseline.
 
 Phase 4 is not considered semantically finished until a reviewed gold set and
-human merge-review workflow exist. Phase 5 GraphRAG retrieval has not started.
+human merge-review workflow exist.
+
+Phase 5 GraphRAG retrieval is complete: deterministic small-model-safe query
+planning, keyword/vector/entity seeds, bounded Neo4j expansion, canonical
+relationship and claim retrieval, deterministic multi-channel RRF, and current
+PostgreSQL evidence/source hydration are integrated in `POST /v1/retrieve`.
+A reviewed four-case acceptance set includes entity, relationship, claim and
+verified two-hop retrieval with complete provenance.
+
+A production-like Assistant query exposed and fixed a precision defect where a
+partial generic `ügyfél` entity/alias match amplified unrelated SMTP evidence
+through graph and claim channels. Hybrid retrieval now applies a strong
+keyword/semantic consensus gate, permits derived graph/claim expansion only
+from an explicit full-name entity anchor, and returns structured evidence only
+when its current source chunk is visible. The verified Kiskőrös night-outage
+query now returns four night-duty sources and no SMTP, Helpdesk, entity, claim,
+relationship, or path noise. A reasoning-disabled end-to-end Assistant run
+produced a source-grounded night-duty answer without unrelated instructions.
+
+A helyi operátori dashboard a /operator útvonalon elkészült. A tokenvédett
+operátori API kanonikus állapotösszesítést, read-only vault-diff előnézetet,
+dokumentumlistát és tartós pending-refresh állapotot ad. A felület a meglévő
+scan, Qdrant projection, extraction és resolution jobokat vezérli, továbbá
+külön idempotens rebuild_graph_projection jobot biztosít. A dokumentumok,
+a gráfépítésre váró extraction futások és a művelet nélküli jobnapló külön
+panelekben jelennek meg.
+
+Az öt módosított Helyi_AI_Asszisztens dokumentum teljes inkrementális
+feldolgozása befejeződött: a scan, Qdrant projection, öt korlátos extraction
+futás, resolution és a második Neo4j-projekció sikeres. Nincs függő frissítés.
+
+Phase 6 Assistant integration is complete in the sibling AI_Assistant
+repository. The explicit user-selected GraphRAG mode deterministically calls
+the authenticated POST /v1/retrieve endpoint, validates and size-bounds the
+structured response, builds source-labelled evidence, supports reasoning,
+remains mutually exclusive with the two MCP modes, and fails without silent
+fallback. Both runtimes remain independently startable and stoppable.
 
 ## Verified baselines
 
@@ -35,7 +71,7 @@ human merge-review workflow exist. Phase 5 GraphRAG retrieval has not started.
 - Markdown documents: 18
 - Latest graph pilot scan: 18 hashed, 18 parsed, 0 failed
 - Structural graph covers all current documents.
-- Semantic graph covers only the three explicitly selected pilot documents.
+- Semantic graph covers the earlier pilot scope and all five refreshed Assistant documents; current graph counts are recorded below.
 
 ### Retrieval baseline
 
@@ -78,6 +114,46 @@ Zero automatic merge was the expected safe outcome: the real sample did not
 contain two compatible mentions with the same supported strong identifier.
 Name similarity never auto-merges.
 
+### GraphRAG retrieval acceptance baseline
+
+- Reviewed cases: 4
+- Passed cases: 4/4
+- Query type, planner reason, source, entity, predicate and claim checks: 100%
+- Bounded path and complete hydrated provenance checks: 100%
+- Verified two-hop path:
+  `Obsidian vault → Tudásbázis mód → általános modellválaszok`
+- API latency: p50 357.08 ms, p95 432.36 ms
+- Retrieval warnings: 0
+- Details:
+  `docs/evaluation/graphrag-retrieval-v1-baseline-2026-07-24.md`
+
+This is a small, reviewed plumbing/provenance acceptance set over the three
+explicitly extracted pilot documents. It does not establish whole-vault
+precision or calibrated confidence.
+
+### Incremental Assistant-document refresh
+
+The five modified Helyi_AI_Asszisztens documents were fully processed on
+2026-07-25 after the initial baseline:
+
+- Changed documents: 5
+- Extracted current chunks: 28
+- Prompt tokens: 21,975
+- Completion tokens: 52,520
+- Valid candidates: 318
+- Fail-closed invalid candidates: 39
+- Resolution review candidates: 32
+- Current canonical entities: 172
+- Current active relationship assertions: 137
+- Current active claims: 113
+- Neo4j projection generation: 2
+- Snapshot objects: 3,284
+- Pending refresh: none
+
+These are current operational counts, not a replacement for the fixed
+three-document graph baseline. The expanded graph needs a new reviewed
+retrieval-quality baseline before broader extraction.
+
 ## Current schema and APIs
 
 Alembic head:
@@ -102,10 +178,24 @@ Implemented job endpoints:
 
 Implemented retrieval/graph endpoints:
 
-- `POST /v1/retrieve`
+- `POST /v1/retrieve` (keyword, semantic, or hybrid; hybrid uses a
+  deterministic planner plus entity/graph/claim expansion)
 - `GET /v1/entities/{entity_id}`
 - `GET /v1/entities/{entity_id}/neighbors`
 - `POST /v1/graph/path`
+
+Implemented operator endpoints:
+
+- GET /operator (local static UI; no-store)
+- GET /v1/operator/overview
+- GET /v1/operator/vaults/{vault_id}/preview
+- GET /v1/operator/vaults/{vault_id}/documents
+- GET /v1/operator/vaults/{vault_id}/pending-refresh
+- POST /v1/operator/vaults/{vault_id}/graph-rebuild
+
+Every relationship, claim and graph path returned by retrieval must hydrate
+through active canonical PostgreSQL state and exact evidence on the current
+document version.
 
 Graph hard limits:
 
@@ -142,11 +232,35 @@ Graph:
 - `src/graphrag_service/api/routes/graph.py`
 - `src/graphrag_service/workers/graph_handlers.py`
 
+GraphRAG retrieval:
+
+- `src/graphrag_service/application/phase5_retrieval.py`
+- `src/graphrag_service/application/query_planner.py`
+- `src/graphrag_service/application/graph_retrieval.py`
+- `src/graphrag_service/adapters/postgres/graphrag_retrieval_store.py`
+- `src/graphrag_service/api/routes/phase5_retrieval.py`
+- `src/graphrag_service/api/schemas/phase5_retrieval.py`
+
+Operator dashboard:
+
+- src/graphrag_service/application/operator.py
+- src/graphrag_service/adapters/postgres/operator_store.py
+- src/graphrag_service/api/routes/operator.py
+- src/graphrag_service/api/schemas/operator.py
+- src/graphrag_service/api/static/operator.html
+
+Local runtime:
+
+- scripts/start-system.ps1
+- scripts/stop-system.ps1
+- scripts/native-runtime.sh
+
 Pilot runners:
 
 - `scripts/run_retrieval_pilot.py`
 - `scripts/run_extraction_pilot.py`
 - `scripts/run_graph_pilot.py`
+- `scripts/run_phase5_evaluation.py`
 
 ## Resolution behavior
 
@@ -199,17 +313,18 @@ Latest verified gates:
 
 - Ruff format: clean
 - Ruff lint: clean
-- Unit tests: 57 passed
-- Integration tests: 6 passed
+- Unit tests: 62 passed
+- Integration tests: 7 passed
 - `pip check`: clean
 - Alembic current: `0008_scope_identifiers_by_vault`
 - Alembic drift: none
 - Docker Compose config: valid
-- Live readiness: ready
+- Live API/worker build and startup: verified
   - PostgreSQL migration current
   - job queue available
   - Qdrant available
   - Neo4j available with required schema
+  - generation és embedding provider is available through native WSL runtime
 - Workspace secret scan: clean
 
 Integration tests must use a separate PostgreSQL database. They downgrade to
@@ -219,13 +334,28 @@ base and upgrade to head. The retained pilot database must not be used.
 
 At the time of this update:
 
-- project PostgreSQL container is healthy;
-- project Neo4j container is healthy;
-- project Qdrant container is healthy and has no leftover test collections;
-- retained canonical database contains exactly one real pilot vault;
-- retained Neo4j contains exactly the `phase4-graph-pilot` vault;
-- pytest PostgreSQL database and Neo4j test vault were removed;
-- BoberDetective PostgreSQL and Qdrant containers remain untouched.
+- GraphRAG API and worker are running natively in WSL.
+- PostgreSQL, Qdrant and Neo4j are running in the dedicated Compose project and
+  are healthy; readiness is ready.
+- Both LM Studio providers are available on Windows loopback 127.0.0.1:1234:
+  qwen/qwen3.5-9b and text-embedding-bge-m3.
+- The canonical PostgreSQL database contains one real read-only pilot vault with
+  18 active Markdown documents and 284 current chunks.
+- The 2026-07-25 incremental refresh processed five modified
+  Helyi_AI_Asszisztens documents: 28 chunks, 21,975 prompt tokens,
+  52,520 completion tokens, 318 valid candidates and 39 fail-closed invalid
+  candidates across five extraction runs.
+- Resolution and projection job 277b20fb-d7c4-47d3-8613-508a6a810345
+  succeeded. Current canonical state: 172 entities, 137 active relationship
+  assertions and 113 active claims.
+- Neo4j projection generation 2 contains 3,284 snapshot objects with SHA-256
+  c658a5bd9032ec51723e4e599170ebc97f2d426d9527cbfeceedc6d6e6f96361.
+- Qdrant has no pending or failed projections; active dimension is 1024.
+- The operator pending-refresh state is false and contains no documents.
+- GraphRAG uses PostgreSQL host port 55433; the separate AI Assistant PostgreSQL
+  remains on 55432. BoberDetective containers and volumes were not modified.
+- The sibling AI Assistant GraphRAG integration is implemented and live-smoke
+  verified, but remains a separate repository and separate Git worktree.
 
 Container/volume state is local only and is not part of Git. A fresh clone must
 run migrations, ingest, extraction, resolution, and projection again.
@@ -243,7 +373,7 @@ run migrations, ingest, extraction, resolution, and projection again.
 
 ## Known limitations and open decisions
 
-1. A reviewed semantic gold set is still missing.
+1. A broad reviewed semantic gold set is still missing.
 2. Human UI/workflow for merge review is not implemented.
 3. Fuzzy/embedding resolution candidate generation is not implemented; these
    methods must remain review-only.
@@ -252,27 +382,28 @@ run migrations, ingest, extraction, resolution, and projection again.
 6. Neo4j replacement is one transaction per bounded vault snapshot; larger
    deployments may require generation-based batched replacement while retaining
    atomic activation.
-7. Phase 5 entity/vector/graph retrieval fusion is not implemented.
-8. Final Assistant integration and stable client example are not implemented.
+7. The Phase 5 reviewed set has only four positive cases and predates the
+   expanded Assistant-document graph. Whole-vault precision, negative queries
+   and confidence calibration remain unmeasured.
+8. The Assistant consumer is implemented and live-smoke verified, but there is
+   no version-pinned cross-repository CI contract yet. Its current worktree is
+   external to this repository and must be committed separately there.
+9. The operator dashboard has unit coverage and live smoke coverage, but the
+   full multi-step state machine does not yet have a dedicated integration test.
+10. Service-token rotation is restart-based and lacks a documented coordinated
+    rotation procedure.
 
-See `docs/open-questions.md` and `docs/implementation/roadmap.md`.
+See docs/open-questions.md and docs/implementation/roadmap.md.
 
-## Recommended next milestone: Phase 5
+## Recommended next milestone: Phase 7 quality and operational hardening
 
-Implement GraphRAG retrieval without generating final prose:
-
-1. Add entity seed retrieval from canonical PostgreSQL entities/aliases.
-2. Add vector seed retrieval from current Qdrant chunks.
-3. Expand only through bounded, active Neo4j assertions.
-4. Hydrate every graph result back through current PostgreSQL evidence.
-5. Discard stale/missing source paths fail-closed.
-6. Deterministically fuse keyword, vector, entity, and graph channels.
-7. Return entities, assertions, claims, paths, and exact sources through the
-   existing structured retrieval response.
-8. Add a multi-hop reviewed evaluation set and provenance regression tests.
-9. Update this state file, roadmap, API contract, and baseline after acceptance.
-
-Do not begin broad whole-vault extraction as part of Phase 5.
+1. Extend the reviewed retrieval corpus with positive, negative,
+   insufficient-source and topic-overlap cases over the current graph.
+2. Turn the Kiskőrös/SMTP precision defect into a permanent acceptance case.
+3. Add operator workflow integration coverage for scan, projection, extraction,
+   resolution, rebuild, interruption and page reload.
+4. Add a version-pinned compatibility test for the Assistant retrieval client.
+5. Keep broad whole-vault extraction blocked until precision is reviewed.
 
 ## Fresh-session checklist
 

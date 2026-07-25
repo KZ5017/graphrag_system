@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -71,6 +72,9 @@ class DeterministicEmbeddingProvider:
 async def test_phase3_outbox_qdrant_hybrid_and_delete_reconciliation(
     tmp_path: Path,
 ) -> None:
+    test_suffix = uuid4().hex
+    test_alias = f"gks_chunks_test_{test_suffix}"
+    old_collection = f"phase3_old_collection_{test_suffix}"
     settings = integration_settings()
     run_alembic("downgrade", settings.postgres_dsn)
     run_alembic("upgrade", settings.postgres_dsn)
@@ -114,22 +118,22 @@ async def test_phase3_outbox_qdrant_hybrid_and_delete_reconciliation(
         store=projection_store,
         provider=provider,
         vectors=vectors,
-        alias="gks_chunks_active",
+        alias=test_alias,
         worker_id="phase3-integration",
         batch_size=8,
         lease_seconds=60,
     )
     outcome = None
     try:
-        await vectors.ensure_collection("phase3_old_collection", 4)
-        await vectors.switch_alias("gks_chunks_active", "phase3_old_collection")
+        await vectors.ensure_collection(old_collection, 4)
+        await vectors.switch_alias(test_alias, old_collection)
         outcome = await projection.run(vault_id=vault.id)
         assert outcome.vector_dimension == 4
         assert outcome.projected_upserts > 0
         async with httpx.AsyncClient(base_url=settings.qdrant_url) as client:
             aliases = (await client.get("/aliases")).json()["result"]["aliases"]
         assert {item["alias_name"]: item["collection_name"] for item in aliases}[
-            "gks_chunks_active"
+            test_alias
         ] == outcome.collection
 
         retrieval = RetrievalService(
@@ -140,7 +144,7 @@ async def test_phase3_outbox_qdrant_hybrid_and_delete_reconciliation(
             candidate_limit=10,
             max_limit=20,
             rrf_k=60,
-            chunks_alias="gks_chunks_active",
+            chunks_alias=test_alias,
         )
         result = await retrieval.retrieve(
             "CMTS modem provisioning",
@@ -188,6 +192,6 @@ async def test_phase3_outbox_qdrant_hybrid_and_delete_reconciliation(
         await vectors.close()
         if outcome is not None:
             async with httpx.AsyncClient(base_url=settings.qdrant_url) as client:
-                await client.delete("/collections/phase3_old_collection")
+                await client.delete(f"/collections/{old_collection}")
                 await client.delete(f"/collections/{outcome.collection}")
         await engine.dispose()

@@ -1,14 +1,15 @@
 # Nyitott kérdések és szükséges mérések
 
-Az alapvető rendszerhatár-döntések lezártak. Az alábbiak nem blokkolják a
-Phase 1 infrastruktúra létrehozását, de a jelzett fázis előtt választ vagy
-mérést igényelnek.
+Az alapvető rendszerhatár-döntések, a Phase 0–6 megvalósítása és az Assistant
+integráció lezárult. Az alábbi pontok a további minőség-, adatkezelési és
+üzemeltetési döntéseket, illetve a még szükséges méréseket rögzítik.
 
 ## Phase 1 előtt vagy közben
 
-1. A Docker runtime natív WSL Docker Engine vagy Docker Desktop?
-   Ez meghatározza az LM Studio host elérését.
-2. Helyileg validált host portok: PostgreSQL 55432, Qdrant 6433/6434, Neo4j 7474/7687
+1. Lezárva: a Compose csak PostgreSQL/Qdrant/Neo4j és migration runtime.
+   Az API és a worker natív WSL-processz, ezért eléri a Windows
+   `127.0.0.1:1234` LM Studio-t proxy és hálózati LM Studio binding nélkül.
+2. Helyileg validált host portok: PostgreSQL 55433 (55432: AI Assistant PostgreSQL), Qdrant 6433/6434, Neo4j 7474/7687
    és API 8080; mindegyik környezeti változóval felülírható.
 3. A service token rotációja az első verzióban restarttal történhet-e?
 
@@ -48,6 +49,24 @@ mérést igényelnek.
    jelölteket?
 8. A dokumentáció aktuális állapotot vagy történeti folyamatleírásokat is
    tartalmaz-e, és milyen frontmatter jelzi ezt?
+
+## Phase 5–6 lezárt eredmények és további mérések
+
+1. A négyes Phase 5 acceptance corpus 4/4 esetet teljesített, teljes aktuális
+   forrásprovenance-szel és egy ellenőrzött kétlépéses gráfúttal.
+2. A Kiskőrös éjszakai üzemzavar kérdésénél feltárt általános ügyfél-entity
+   zajt determinisztikus retrieval gate javította; az SMTP-források kikerültek
+   a találatokból.
+3. Az explicit Assistant GraphRAG mód hitelesített HTTP klienssel, típusos és
+   méretkorlátos válasszal, reasoning támogatással, safe provenance-szel és
+   silent fallback nélküli hibakezeléssel működik.
+4. Az öt módosított Helyi_AI_Asszisztens dokumentum 2026-07-25-én teljes
+   inkrementális feldolgozást kapott. A jelenlegi gráf 172 entitást,
+   137 kapcsolatállítást és 113 claimet tartalmaz; nincs függő frissítés.
+5. Következő mérés: bővített whole-vault pozitív/negatív precision corpus,
+   különösen témán kívüli, közös szavas és elégtelen-forrás kérdésekkel.
+6. Nyitott üzemeltetési döntés: service-token rotációs eljárás és dokumentált
+   kulcscsere mindkét runtime leállításának minimalizálásával.
 
 ## Kötelező Phase 0/2 kapacitásmérés
 

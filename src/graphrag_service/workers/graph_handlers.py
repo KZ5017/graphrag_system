@@ -77,4 +77,20 @@ def build_graph_handlers(
             },
         }
 
-    return {"resolve_and_project_graph": resolve_and_project_graph}, graph
+    async def rebuild_graph_projection(job: ClaimedJob) -> dict[str, object]:
+        vault_id = UUID(str(job.payload["vault_id"]))
+        projected = await projection.rebuild_vault(vault_id)
+        return {
+            "vault_id": str(vault_id),
+            "projection": {
+                "generation": projected.generation,
+                "snapshot_sha256": projected.snapshot_sha256,
+                "object_count": projected.object_count,
+                "projected": projected.projected,
+            },
+        }
+
+    return {
+        "resolve_and_project_graph": resolve_and_project_graph,
+        "rebuild_graph_projection": rebuild_graph_projection,
+    }, graph

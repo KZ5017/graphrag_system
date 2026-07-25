@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GraphRAG kezelő</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1220;--panel:#111b2e;--line:#26344d;--text:#e8eef8;--muted:#92a2bb;--accent:#56d6b0;--warn:#f2bd5d;--bad:#ff7474}
+    *{box-sizing:border-box}body{margin:0;font:15px/1.45 system-ui,sans-serif;background:linear-gradient(145deg,#09101d,#101c30);color:var(--text)}
+    main{max-width:1180px;margin:auto;padding:28px 18px 60px}h1{margin:0;font-size:28px}h2{font-size:18px;margin:0 0 14px}
+    .lead{color:var(--muted);margin:5px 0 24px}.panel{background:rgba(17,27,46,.94);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0;box-shadow:0 18px 48px #0004}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.grow{flex:1}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+    .metric{background:#0c1628;border:1px solid var(--line);border-radius:10px;padding:13px}.metric strong{display:block;font-size:24px}.metric span{color:var(--muted);font-size:12px}
+    input,select,button{border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:#0b1424;color:var(--text)}
+    input{min-width:280px}button{cursor:pointer;font-weight:650}button:hover{border-color:var(--accent)}button.primary{background:#174e43;border-color:#2b8f76}button.warn{background:#493513;border-color:#8a6426}button:disabled{opacity:.45;cursor:not-allowed}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;background:#25334a}.ok{color:var(--accent)}.warning{color:var(--warn)}.bad{color:var(--bad)}
+    table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px 7px;vertical-align:top}th{color:var(--muted)}code{color:#b9f3e2}
+    .scroll{overflow:auto;max-height:360px}.log{white-space:pre-wrap;background:#08101d;border-radius:9px;padding:12px;min-height:48px;color:#bfd0e7}
+    .hint{color:var(--muted);font-size:13px}.hidden{display:none}.right{margin-left:auto}
+  </style>
+</head>
+<body>
+<main>
+  <h1>GraphRAG kezelő</h1>
+  <p class="lead">Állapotfelmérés, célzott frissítés és tartós jobkövetés egy helyen.</p>
+
+  <section class="panel">
+    <div class="row">
+      <label for="token">Service token</label>
+      <input id="token" type="password" autocomplete="off" placeholder="GKS_SERVICE_TOKEN">
+      <button id="connect" class="primary">Kapcsolódás</button>
+      <span id="connection" class="badge">nincs kapcsolat</span>
+    </div>
+    <p class="hint">A token csak az aktuális böngészőfül session storage-ában marad.</p>
+  </section>
+
+  <div id="workspace" class="hidden">
+    <section class="panel">
+      <div class="row">
+        <h2>Rendszerállapot</h2>
+        <button id="reload" class="right">Frissítés</button>
+      </div>
+      <div id="components" class="grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <h2>Vault és gráf</h2>
+        <select id="vault"></select>
+      </div>
+      <div id="metrics" class="grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <h2>Változások</h2>
+        <button id="preview">Változások felmérése</button>
+        <span id="previewState" class="badge">még nincs mérés</span>
+      </div>
+      <div id="changes" class="scroll"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Dokumentumfeldolgozási műveletek</h2>
+      <div class="row">
+        <button id="scan">1. Vault-változások alkalmazása</button>
+        <button id="index">2. Vektorindex frissítése</button>
+        <button id="extract">3. Kijelölt dokumentumok kivonatolása</button>
+        <button id="rebuild">Csak Neo4j-projekció újraépítése</button>
+        <button id="full" class="primary">Teljes kijelölt frissítés</button>
+      </div>
+      <p class="hint">Az 1–3. gomb a Változások panel kijelölt dokumentumaira vonatkozik. A teljes frissítés: scan → Qdrant → dokumentumonként legfeljebb 6 chunk kivonatolása → resolution és Neo4j-projekció.</p>
+      <div id="activity" class="log">Nincs futó művelet.</div>
+    </section>
+
+    <section class="panel">
+      <div class="row"><h2>Gráfépítésre váró kivonatolások</h2><button id="resolve" class="primary">Kijelölt kivonatolások feloldása és gráfépítés</button></div>
+      <p class="hint">Itt már sikeres kivonatolási futásokat jelölsz ki, nem dokumentumokat.</p>
+      <div id="pendingRuns" class="scroll"></div>
+    </section>
+
+    <section class="panel">
+      <div class="row"><h2>Legutóbbi tartós jobok – napló</h2><span class="hint">Csak tájékoztató; itt nincs kijelölés vagy további művelet.</span></div>
+      <div id="jobs" class="scroll"></div>
+    </section>
+  </div>
+</main>
+<script>
+  const state={overview:null,preview:null,pending:null,selectedPaths:null,busy:false};
+  const el=id=>document.getElementById(id);
+  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const token=()=>el("token").value.trim();
+  const selectedVault=()=>el("vault").value;
+  const log=message=>{el("activity").textContent=message;};
+
+  async function api(path,options={}){
+    const headers=Object.assign({"Authorization":"Bearer "+token()},options.headers||{});
+    if(options.body)headers["Content-Type"]="application/json";
+    const response=await fetch(path,Object.assign({},options,{headers}));
+    if(!response.ok){
+      let detail=response.status+" "+response.statusText;
+      try{const body=await response.json();detail=body.detail||detail;}catch(_){}
+      throw new Error(detail);
+    }
+    return response.status===204?null:response.json();
+  }
+
+  async function loadOverview(){
+    state.overview=await api("/v1/operator/overview");
+    el("connection").textContent=state.overview.readiness;
+    el("connection").className="badge "+(state.overview.readiness==="ready"?"ok":state.overview.readiness==="degraded"?"warning":"bad");
+    const components=Object.entries(state.overview.components).map(([name,item])=>
+      '<div class="metric"><strong class="'+(item.status==="up"?"ok":"bad")+'">'+esc(item.status)+'</strong><span>'+esc(name)+" · "+esc(item.detail)+'</span></div>'
+    ).join("");
+    el("components").innerHTML=components||'<span class="hint">Nincs komponensadat.</span>';
+    const previous=selectedVault();
+    el("vault").innerHTML=state.overview.vaults.map(v=>'<option value="'+esc(v.id)+'">'+esc(v.name)+'</option>').join("");
+    if(previous&&state.overview.vaults.some(v=>v.id===previous))el("vault").value=previous;
+    renderVault();
+    renderJobs();
+  }
+
+  function renderVault(){
+    const vault=state.overview?.vaults.find(v=>v.id===selectedVault());
+    if(!vault)return;
+    const values=[
+      ["Dokumentum",vault.document_count],["Chunk",vault.chunk_count],["Entitás",vault.entity_count],
+      ["Kapcsolat",vault.relationship_count],["Állítás",vault.claim_count],
+      ["Qdrant függő",vault.qdrant_pending],["Qdrant hiba",vault.qdrant_failed],
+      ["Utolsó scan",vault.latest_scan_status||"—"],["Utolsó gráf",vault.latest_graph_status||"—"]
+    ];
+    el("metrics").innerHTML=values.map(v=>'<div class="metric"><strong>'+esc(v[1])+'</strong><span>'+esc(v[0])+'</span></div>').join("");
+  }
+
+  function renderJobs(){
+    const jobs=state.overview?.recent_jobs||[];
+    el("jobs").innerHTML='<table><thead><tr><th>Típus</th><th>Állapot</th><th>Idő</th><th>Eredmény / hiba</th></tr></thead><tbody>'+
+      jobs.map(job=>{
+        const detail=job.error_message||JSON.stringify(job.checkpoint||{});
+        return '<tr><td>'+esc(job.job_type)+'</td><td>'+esc(job.status)+'</td><td>'+esc(job.created_at)+'</td><td><code>'+esc(detail).slice(0,220)+'</code></td></tr>';
+      }).join("")+'</tbody></table>';
+  }
+
+  function renderPendingRuns(){
+    const documents=(state.pending?.documents||[]).filter(document=>document.extraction_run_id);
+    if(!documents.length){
+      el("pendingRuns").innerHTML='<p class="hint">Nincs gráfépítésre váró kivonatolás.</p>';
+      el("resolve").disabled=true;
+      return;
+    }
+    el("resolve").disabled=false;
+    el("pendingRuns").innerHTML='<table><thead><tr><th></th><th>Dokumentum</th><th>Kivonatolási futás</th></tr></thead><tbody>'+
+      documents.map(document=>'<tr><td><input class="runCheck" type="checkbox" value="'+esc(document.extraction_run_id)+'" checked></td><td>'+esc(document.relative_path)+'</td><td><code>'+esc(document.extraction_run_id)+'</code></td></tr>').join("")+
+      '</tbody></table>';
+  }
+
+  async function preview(){
+    state.preview=await api("/v1/operator/vaults/"+selectedVault()+"/preview");
+    state.pending=await api("/v1/operator/vaults/"+selectedVault()+"/pending-refresh");
+    const count=state.preview.changes.length;
+    const pendingCount=state.pending.documents.length;
+    el("previewState").textContent=count?count+" új változás":state.pending.graph_refresh_required?pendingCount+" feldolgozásra vár":"naprakész";
+    el("previewState").className="badge "+(count||state.pending.graph_refresh_required?"warning":"ok");
+    if(count){
+      el("changes").innerHTML='<table><thead><tr><th></th><th>Típus</th><th>Útvonal</th></tr></thead><tbody>'+
+        state.preview.changes.map((change,index)=>{
+          const actionable=["created","modified"].includes(change.kind);
+          const path=change.new_relative_path||change.old_relative_path;
+          const checked=actionable&&(state.selectedPaths===null||state.selectedPaths.includes(path));
+          return '<tr><td><input class="changeCheck" data-index="'+index+'" type="checkbox" '+(checked?"checked":"")+' '+(actionable?"":"disabled")+'></td><td>'+esc(change.kind)+'</td><td>'+esc(path)+'</td></tr>';
+        }).join("")+'</tbody></table>';
+    }else if(state.pending.graph_refresh_required){
+      const rows=state.pending.documents.map((document,index)=>{
+        const extracted=Boolean(document.extraction_run_id);
+        const checked=!extracted&&(state.selectedPaths===null||state.selectedPaths.includes(document.relative_path));
+        const itemState=extracted?"kivonatolva, gráfépítésre vár":"kivonatolásra vár";
+        return '<tr><td><input class="pendingCheck" data-index="'+index+'" type="checkbox" '+(checked?"checked":"")+' '+(extracted?"disabled":"")+'></td><td>'+esc(itemState)+'</td><td>'+esc(document.relative_path)+'</td></tr>';
+      }).join("");
+      el("changes").innerHTML=rows?'<p class="warning">A vault scan elkészült; ezek a dokumentumok a további GraphRAG-feldolgozásra várnak.</p><table><thead><tr><th></th><th>Állapot</th><th>Útvonal</th></tr></thead><tbody>'+rows+'</tbody></table>':'<p class="warning">A scan forrásváltozást alkalmazott. Már csak a Neo4j-projekció újraépítése szükséges.</p>';
+    }else{
+      state.selectedPaths=null;
+      el("changes").innerHTML='<p class="ok">A vault tartalma és a GraphRAG gráfállapota naprakész.</p>';
+    }
+    renderPendingRuns();
+    return state.preview;
+  }
+
+  function selectedPaths(){
+    const current=[...document.querySelectorAll(".changeCheck:checked")].map(input=>{
+      const change=state.preview.changes[Number(input.dataset.index)];
+      return change.new_relative_path;
+    }).filter(Boolean);
+    if(current.length)return current;
+    return [...document.querySelectorAll(".pendingCheck:checked")].map(input=>
+      state.pending.documents[Number(input.dataset.index)].relative_path
+    );
+  }
+
+  function pendingRunIds(){
+    return (state.pending?.documents||[]).map(document=>document.extraction_run_id).filter(Boolean);
+  }
+
+  async function postJob(path,body){
+    return api(path,{method:"POST",body:JSON.stringify(body)});
+  }
+
+  async function waitJob(jobId,label){
+    while(true){
+      const job=await api("/v1/jobs/"+jobId);
+      log(label+": "+job.status+" ("+jobId+")");
+      if(job.status==="succeeded")return job;
+      if(["failed","cancelled"].includes(job.status))throw new Error(label+" sikertelen: "+(job.error_message||job.status));
+      await new Promise(resolve=>setTimeout(resolve,1200));
+    }
+  }
+
+  async function runScan(){
+    const accepted=await postJob("/v1/vaults/"+selectedVault()+"/scans",{scan_type:"incremental"});
+    return waitJob(accepted.job_id,"Vault scan");
+  }
+
+  async function runIndex(){
+    const accepted=await postJob("/v1/index-jobs",{vault_id:selectedVault()});
+    return waitJob(accepted.job_id,"Vektorindex");
+  }
+
+  async function runExtraction(paths){
+    const documents=await api("/v1/operator/vaults/"+selectedVault()+"/documents");
+    const byPath=new Map(documents.filter(d=>d.lifecycle_status==="active").map(d=>[d.relative_path,d]));
+    const selected=paths.map(path=>byPath.get(path)).filter(Boolean);
+    if(!selected.length)throw new Error("Nincs kivonatolható kijelölt dokumentum.");
+    const runs=[];
+    for(let i=0;i<selected.length;i++){
+      const document=selected[i];
+      const accepted=await postJob("/v1/extraction-jobs",{vault_id:selectedVault(),document_ids:[document.id],max_chunks:6});
+      const finished=await waitJob(accepted.job_id,"Kivonatolás "+(i+1)+"/"+selected.length);
+      if(finished.checkpoint.extraction_run_id)runs.push(finished.checkpoint.extraction_run_id);
+    }
+    return runs;
+  }
+
+  async function runResolution(runIds){
+    if(!runIds.length)throw new Error("Nincs kijelölt sikeres extraction futás.");
+    const accepted=await postJob("/v1/resolution-jobs",{vault_id:selectedVault(),extraction_run_ids:runIds});
+    return waitJob(accepted.job_id,"Resolution és Neo4j");
+  }
+
+  async function runGraphRebuild(){
+    const accepted=await postJob("/v1/operator/vaults/"+selectedVault()+"/graph-rebuild",{});
+    return waitJob(accepted.job_id,"Neo4j-projekció");
+  }
+
+  async function guarded(task){
+    if(state.busy)return;
+    state.busy=true;
+    document.querySelectorAll("button").forEach(button=>button.disabled=true);
+    try{
+      await task();
+      await loadOverview();
+      log("A művelet sikeresen befejeződött.");
+    }catch(error){
+      log("Hiba: "+error.message);
+    }finally{
+      state.busy=false;
+      document.querySelectorAll("button").forEach(button=>button.disabled=false);
+      renderPendingRuns();
+    }
+  }
+
+  el("connect").onclick=()=>guarded(async()=>{
+    sessionStorage.setItem("graphragOperatorToken",token());
+    await loadOverview();
+    el("workspace").classList.remove("hidden");
+    await preview();
+  });
+  el("reload").onclick=()=>guarded(loadOverview);
+  el("vault").onchange=()=>guarded(async()=>{state.selectedPaths=null;renderVault();await preview();});
+  el("preview").onclick=()=>guarded(preview);
+  el("scan").onclick=()=>guarded(async()=>{state.selectedPaths=selectedPaths();await runScan();await preview();});
+  el("index").onclick=()=>guarded(runIndex);
+  el("extract").onclick=()=>guarded(async()=>{await runExtraction(selectedPaths());await preview();});
+  el("resolve").onclick=()=>guarded(async()=>{
+    const runs=[...document.querySelectorAll(".runCheck:checked")].map(input=>input.value);
+    await runResolution(runs);
+    state.selectedPaths=null;
+    await preview();
+  });
+  el("rebuild").onclick=()=>guarded(runGraphRebuild);
+  el("full").onclick=()=>guarded(async()=>{
+    if(!confirm("Elindítsam a kijelölt teljes frissítést? Ez helyi LLM-hívásokat is végezhet."))return;
+    if(!state.preview)await preview();
+    const graphRefreshRequired=state.preview.needs_refresh||state.pending.graph_refresh_required;
+    const paths=selectedPaths();
+    state.selectedPaths=paths;
+    if(state.preview.needs_refresh)await runScan();
+    await runIndex();
+    const runs=pendingRunIds();
+    if(paths.length)runs.push(...await runExtraction(paths));
+    if(runs.length){await runResolution([...new Set(runs)]);}
+    else if(graphRefreshRequired){await runGraphRebuild();}
+    await preview();
+  });
+
+  const saved=sessionStorage.getItem("graphragOperatorToken");
+  if(saved)el("token").value=saved;
+</script>
+</body>
+</html>

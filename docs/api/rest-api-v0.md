@@ -169,14 +169,38 @@ hasonlóság nem végezhet automatikus merge-et.
 
 Kooperatív cancel. Csak biztonságos checkpointnál áll le.
 
+## 5.1. Helyi operátori felület
+
+A /operator HTML-oldal nem tartalmaz secretet; a böngészőben megadott service
+tokennel hívja az alábbi, normál /v1 védelem alatt álló végpontokat:
+
+- GET /v1/operator/overview: readiness, vault/gráf számlálók és legutóbbi jobok;
+- GET /v1/operator/vaults/{vault_id}/preview: írásmentes inkrementális diff;
+- GET /v1/operator/vaults/{vault_id}/pending-refresh: a legutóbbi,
+  Neo4j-projekcióval még le nem zárt scan dokumentumai és extraction állapotuk;
+- GET /v1/operator/vaults/{vault_id}/documents: aktuális dokumentumválasztó;
+- POST /v1/operator/vaults/{vault_id}/graph-rebuild: modellhívás nélküli,
+  tartós rebuild_graph_projection job.
+
+A módosító gombok a meglévő scan, index, extraction és resolution job API-kat
+használják. Az előnézet önmagában nem hoz létre scan runt és nem módosítja a
+kanonikus PostgreSQL-állapotot.
+A pending-refresh nem a pillanatnyi filesystem diffet ismétli: a legutóbbi
+változást tartalmazó sikeres scan auditjából állítja vissza a még be nem fejezett
+workflow-t, és egy újabb sikeres Neo4j-projekció zárja le.
+
 ## 6. Retrieval API
 
 ### `POST /v1/retrieve`
 
-A Phase 3 implementált kérés mezői: query, strategy (keyword, semantic vagy
-hybrid), limit (1–50) és opcionális vault_id. A találatok mellett külön
-context_chunks lista hordozza az azonos szakasz közvetlen szomszédait.
-Nem készít végső természetes nyelvű választ.
+A Phase 5 implementált kérésmezői: `query`, `strategy` (`keyword`,
+`semantic` vagy `hybrid`), `limit` (1–50) és opcionális `vault_id`. A `hybrid`
+stratégia determinisztikus query plannert, entity/vector seedeket, korlátos
+Neo4j bejárást és claim retrievalt használ. Minden assertion, claim és path
+csak aktuális PostgreSQL exact evidence-hidratálás után kerülhet a válaszba.
+A `context_chunks` az azonos szakasz szomszédait és a szemantikus eredményeket
+alátámasztó source chunkokat hordozza. A végpont nem készít végső természetes
+nyelvű választ.
 
 ```json
 {
@@ -193,42 +217,46 @@ Strategy v0:
 keyword
 semantic
 hybrid
-entity
-graph
 ```
 
-Az `auto` csak a query routing fázisban kerül be.
+Az `entity` és `graph` response query type/tervezési fogalom, nem elfogadott
+request strategy. Hybrid kérésnél a determinisztikus planner a kérdés
+szövegjegyeiből választ `hybrid`, `entity` vagy `graph` query type-ot; ehhez nem
+hív generation modellt.
 
 ### Retrieval response
 
 ```json
 {
   "query_type": "hybrid",
-  "retrieval_plan": {
-    "channels": ["keyword", "semantic"],
-    "graph_expansion": false
-  },
+  "retrieval_plan": ["keyword", "semantic", "entity", "graph", "claim"],
+  "planner_reason_code": "general_hybrid",
+  "strategy": "hybrid",
   "chunks": [],
+  "context_chunks": [],
   "entities": [],
   "relationships": [],
   "claims": [],
   "retrieval_paths": [],
   "sources": [],
   "warnings": [],
-  "limits": {
-    "truncated": false
-  },
+  "truncated": false,
   "confidence": null
 }
 ```
 
-Minden találat channel-specifikus score-t és fusion score-t tartalmaz.
+Minden chunk keyword, semantic, graph, claim és fusion score mezőt hordoz.
+A `retrieval_plan` a planner által kért csatornákat jelzi; az üres vagy degradált
+csatornát a warningok és a tényleges találati listák teszik láthatóvá. A
+`planner_reason_code` stabil, géppel feldolgozható routing-indok. A `sources`
+deduplikált, és minden visszaadott relationship, claim és path aktuális
+forráschunkja szerepel benne.
 
 ### `POST /v1/query`
 
-A későbbi GraphRAG query planner végpontja. Query classificationt,
-decompositiont és graph/vector seed tervezést végezhet, de v0-ban nem
-generál végső prózai választ.
+Fenntartott későbbi orchestration végpont. A Phase 5 determinisztikus
+classification és seed-tervezés jelenleg közvetlenül a `/v1/retrieve` része;
+külön `/v1/query` végpont nincs implementálva.
 
 ## 7. Source szerződés
 

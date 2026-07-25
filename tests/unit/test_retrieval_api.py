@@ -32,9 +32,16 @@ class FakeRetrievalService:
         )
         return RetrievalResult(
             query_id=uuid4(),
+            query_type="hybrid",
+            retrieval_plan=("keyword", "semantic"),
+            planner_reason_code="legacy_strategy",
             strategy="hybrid",
             chunks=(chunk,),
             context_chunks=(),
+            entities=(),
+            relationships=(),
+            retrieval_paths=(),
+            claims=(),
             warnings=(),
             truncated=False,
         )
@@ -63,7 +70,10 @@ def test_retrieve_api_returns_structured_provenance(settings_factory) -> None:
     assert body["chunks"][0]["scores"] == {
         "keyword": 0.8,
         "semantic": 0.9,
+        "graph": None,
+        "claim": None,
         "fusion": 0.03,
     }
+    assert body["planner_reason_code"] == "legacy_strategy"
     assert body["confidence"] is None
     assert disabled_index.status_code == 503

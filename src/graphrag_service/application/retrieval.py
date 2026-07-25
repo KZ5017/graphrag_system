@@ -176,9 +176,16 @@ class RetrievalService:
         )
         return RetrievalResult(
             query_id=query_id,
+            query_type=strategy,
+            retrieval_plan=(strategy,),
+            planner_reason_code="legacy_strategy",
             strategy=strategy,
             chunks=tuple(ranked),
             context_chunks=tuple(context_chunks),
+            entities=(),
+            relationships=(),
+            retrieval_paths=(),
+            claims=(),
             warnings=warning_tuple,
             truncated=truncated,
         )

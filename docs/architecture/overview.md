@@ -38,6 +38,13 @@ Mindkettő ugyanazt a Python package-et és application service réteget
 használja. Ez nem microservice-felbontás: az API és a worker külön
 életciklusú processz, de közös kódbázis.
 
+Windows/WSL környezetben az API és a worker natívan WSL-ben fut; PostgreSQL,
+Qdrant és Neo4j Compose-konténerek, loopback host portokon. Ez teszi lehetővé,
+hogy az API/worker a kizárólag Windows `127.0.0.1:1234` címen figyelő LM Studio-t
+elérje proxy vagy nem-loopback LM Studio binding nélkül. A
+`scripts/start-system.ps1` és `scripts/stop-system.ps1` kezeli a két runtime
+együtt indítását és leállítását.
+
 A tartós job queue kezdetben PostgreSQL-alapú. Redis és Dramatiq csak akkor
 vezethető be, ha a mért terhelés vagy több worker koordinációja ezt
 indokolja.

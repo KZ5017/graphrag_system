@@ -149,5 +149,11 @@ At the start of a future session:
 7. Update `PROJECT_STATE.md` whenever a milestone, migration head, test count,
    pilot baseline, known limitation, or next step changes materially.
 
-The next planned milestone is Phase 5 GraphRAG retrieval: entity/vector seeds,
-bounded graph expansion, deterministic fusion, source hydration, and evaluation.
+Phase 6 Assistant integration is implemented in the sibling
+/home/bober/projects/AI_Assistant repository and verified against this
+service. Treat that repository as reference-only from this workspace.
+
+The next planned milestone is retrieval quality and operational hardening:
+expand the reviewed positive/negative corpus over the refreshed graph, add
+operator-workflow integration coverage, and retain deterministic, source-bound
+answers before broadening extraction scope.

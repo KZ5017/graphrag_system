@@ -27,6 +27,7 @@ def integration_settings() -> Settings:
     if not dsn or not password:
         pytest.skip("dedicated Phase 1 integration environment is not configured")
     return Settings(
+        _env_file=None,
         environment="test",
         service_token="integration-service-token-32-characters",
         postgres_dsn=dsn,
@@ -34,6 +35,8 @@ def integration_settings() -> Settings:
         neo4j_uri=os.environ.get("GKS_TEST_NEO4J_URI", "bolt://127.0.0.1:7687"),
         neo4j_username=os.environ.get("GKS_TEST_NEO4J_USERNAME", "neo4j"),
         neo4j_password=password,
+        generation_provider_enabled=False,
+        embedding_provider_enabled=False,
     )
 
 

@@ -5,8 +5,10 @@ Obsidian-vault read-only feldolgozásához.
 
 ## Projektállapot
 
-A Phase 0–3 lezárult. A projekt jelenleg a
-**Phase 4 – Tudásgráf** első, fail-closed extraction szeletét is tartalmazza:
+A Phase 0–6 lezárult. A projekt a Phase 4 fail-closed tudásgráfmagját, a teljes
+**Phase 5 – GraphRAG retrieval** vertikális szeletét, valamint a külön
+AI Assistanttal ellenőrzött **Phase 6 – Assistant integrációs szerződést** is
+tartalmazza:
 
 - allowlistes, kizárólag olvasó filesystem adapter;
 - inkrementális stat/hash scan és stabil dokumentumidentitás;
@@ -31,7 +33,11 @@ A Phase 0–3 lezárult. A projekt jelenleg a
 - forráscserével kaszkádoló evidence/candidate retention és valós 3×2 chunk baseline;
 - determinisztikus strong-ID resolution, névegyezési review queue és kanonikus assertionök;
 - outbox-auditált, tranzakciósan cserélhető Neo4j vault snapshot;
-- entity detail, bounded neighbors és legfeljebb 4 hopos path REST API.
+- entity detail, bounded neighbors és legfeljebb 4 hopos path REST API;
+- lokális kis modelltől független, determinisztikus query planner;
+- keyword/vector/entity/graph/claim retrieval és determinisztikus fusion;
+- aktuális forráshoz kötött claim/assertion/path hidratálás;
+- 4/4-es review-zott Phase 5 baseline, benne ellenőrzött kétlépéses gráfút.
 
 A candidate extraction, a kanonikus entity resolution és a Neo4j szemantikus
 projekció működik. A retrieval, extraction és graph baseline is a valós 18
@@ -68,12 +74,21 @@ ha kezdetben csak egy vaultot használunk.
 
 ## Fejlesztői indítás
 
-Követelmény: Python 3.12 és Docker Compose. Másold a `.env.example` fájlt
-`.env` néven, cseréld le a `change-me` secreteket, majd indítsd a
-stacket a `docker compose up -d` paranccsal. A host portok kizárólag
-loopbackre vannak publikálva és az `.env` fájlban felülírhatók.
+Követelmény: Python 3.12, WSL és Docker Compose. Másold a `.env.example`
+fájlt `.env` néven, cseréld le a `change-me` secreteket, majd Windows
+PowerShellből indítsd:
 
-A liveness a `http://127.0.0.1:8080/health`, a komponensenkénti readiness
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-system.ps1
+```
+
+PostgreSQL, Qdrant és Neo4j külön Docker-konténerben fut. Az API és a worker
+natív WSL-processz, így a Windows loopbackre kötött LM Studio (`127.0.0.1:1234`)
+elérhető marad anélkül, hogy hálózatra kellene megnyitni vagy proxyt telepíteni.
+A leállítás: `powershell -ExecutionPolicy Bypass -File .\scripts\stop-system.ps1`.
+
+A host portok kizárólag loopbackre vannak publikálva és az `.env` fájlban
+felülírhatók. A liveness a `http://127.0.0.1:8080/health`, a komponensenkénti readiness
 a `http://127.0.0.1:8080/ready` címen érhető el.
 
 Lokális ellenőrzés:
@@ -84,6 +99,41 @@ python3 -m venv .venv
 .venv/bin/ruff check src migrations tests
 .venv/bin/pytest
 ```
+
+## Helyi GraphRAG kezelő
+
+A szolgáltatás elindítása után a loopbacken elérhető operátori felület:
+http://127.0.0.1:8080/operator
+
+A kapcsolódáshoz a helyi .env fájl GKS_SERVICE_TOKEN értéke szükséges.
+A felület read-only változáselőnézetet, komponens- és gráfállapotot, tartós
+jobkövetést, valamint külön vagy teljes frissítési workflow-t biztosít. A teljes
+workflow csak a kijelölt, létrehozott vagy módosított dokumentumokra indít
+korlátos extractiont; törlésnél vagy átnevezésnél modellhívás nélkül újraépíti
+a Neo4j-projekciót. A vaultba a felület sem ír.
+A scan után a diff-lista helyett a legutóbbi, még nem gráfprojektált scan
+feldolgozási listája marad látható. Ez oldalfrissítés vagy újranyitás után is
+visszaállítható, így a scan és a vektorindex külön futtatása után az extraction
+és a gráfépítés biztonságosan folytatható.
+
+Az operátori felületen a három különböző felelősség elkülönül:
+
+- a **Változások** panelen dokumentumok jelölhetők ki;
+- a **Gráfépítésre váró kivonatolások** panelen sikeres extraction futások
+  jelölhetők ki resolutionre és gráfprojekcióra;
+- a **Legutóbbi tartós jobok – napló** csak tájékoztató, nem tartalmaz
+  műveleti checkboxokat.
+
+## AI Assistant integráció
+
+A sibling /home/bober/projects/AI_Assistant alkalmazásban explicit GraphRAG
+mód készült. A user kapcsoló minden kérdésnél determinisztikusan meghívja a
+tokenvédett POST /v1/retrieve végpontot; a modell nem dönthet a retrieval
+kihagyásáról. A GraphRAG, Obsidian MCP és Excel MCP mód kölcsönösen kizáró,
+a reasoning kapcsoló ettől függetlenül használható. A kliens típusosan
+validálja és méretkorlátozza a választ, forráscímkézett evidence-et ad a
+modellnek, és hiba esetén nem vált vissza csendben normál chatre. A két rendszer
+egymástól függetlenül indítható és állítható le.
 
 ## Dokumentáció
 
@@ -101,6 +151,8 @@ python3 -m venv .venv
 - [LM Studio retrieval baseline](docs/evaluation/retrieval-pilot-v0-baseline-2026-07-23.md)
 - [LM Studio extraction baseline](docs/evaluation/extraction-pilot-v0-baseline-2026-07-23.md)
 - [LM Studio graph baseline](docs/evaluation/graph-pilot-v0-baseline-2026-07-24.md)
+- [GraphRAG retrieval v1 corpus](docs/evaluation/graphrag-retrieval-v1.json)
+- [GraphRAG retrieval v1 baseline](docs/evaluation/graphrag-retrieval-v1-baseline-2026-07-24.md)
  
 ## Alapelvek
 
@@ -118,6 +170,7 @@ No source -> no assertion.
 
 ## Következő mérföldkő
 
-A következő implementációs mérföldkő a **Phase 5 GraphRAG retrieval**: entity
-seed, bounded graph expansion és determinisztikus vector/graph fusion. A Phase 4
-graph baseline 47 entitást, 45 kapcsolatállítást és 36 claimet vetített Neo4j-be.
+A következő mérföldkő a retrieval-minőség és az üzemeltetés megerősítése:
+bővített pozitív/negatív review corpus a frissített gráfon, operátori workflow
+integration tesztek, valamint a retrieval-zaj és a forrásrelevancia további
+determinista regresszióvédelme.

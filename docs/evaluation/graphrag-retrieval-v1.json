@@ -1,0 +1,99 @@
+{
+  "version": "graphrag-retrieval-v1",
+  "reviewed_on": "2026-07-24",
+  "scope": "Three explicitly extracted pilot documents; deterministic planner and current-source GraphRAG retrieval.",
+  "cases": [
+    {
+      "id": "G01",
+      "query": "Mivel kommunikál az OTRS?",
+      "strategy": "hybrid",
+      "limit": 10,
+      "expected_query_type": "graph",
+      "expected_reason_code": "relationship_or_path_cue",
+      "expected_source_paths": [
+        "Belső_tudásbázis/NOC/Folyamatok/SMTP-tiltott-ügyfelek-kezelése.md"
+      ],
+      "expected_entities": [
+        "OTRS"
+      ],
+      "expected_predicates": [
+        "PART_OF",
+        "SUPPORTS"
+      ],
+      "expected_claim_substrings": [
+        "OTRS supports the process"
+      ],
+      "min_path_hops": 1
+    },
+    {
+      "id": "G02",
+      "query": "OTRS",
+      "strategy": "hybrid",
+      "limit": 10,
+      "expected_query_type": "entity",
+      "expected_reason_code": "short_identifier_or_acronym",
+      "expected_source_paths": [
+        "Belső_tudásbázis/NOC/Folyamatok/SMTP-tiltott-ügyfelek-kezelése.md"
+      ],
+      "expected_entities": [
+        "OTRS"
+      ],
+      "expected_predicates": [
+        "PART_OF"
+      ],
+      "expected_claim_substrings": [
+        "system 'OTRS'"
+      ],
+      "min_path_hops": 1
+    },
+    {
+      "id": "G03",
+      "query": "Mire váltják le a DHCP IP kiosztást, és milyen WAN kapcsolattípus tartozik hozzá?",
+      "strategy": "hybrid",
+      "limit": 10,
+      "expected_query_type": "graph",
+      "expected_reason_code": "relationship_or_path_cue",
+      "expected_source_paths": [
+        "Eszközök/Szolgáltatói_eszközök/Végponti_eszközök/Optikai_hálózat/huawei-ont-k-kezelési-utmutato.md"
+      ],
+      "expected_entities": [
+        "DHCP IP kiosztás",
+        "PPPoE protokoll",
+        "WAN kapcsolattípus"
+      ],
+      "expected_predicates": [
+        "RELATED_TO",
+        "USES"
+      ],
+      "expected_claim_substrings": [
+        "DHCP IP allocation process",
+        "WAN connection type is set to PPPoE"
+      ],
+      "min_path_hops": 1
+    },
+    {
+      "id": "G04",
+      "query": "Milyen mód válaszol az Obsidian vault tartalma alapján?",
+      "strategy": "hybrid",
+      "limit": 10,
+      "expected_query_type": "hybrid",
+      "expected_reason_code": "general_hybrid",
+      "expected_source_paths": [
+        "Belső_tudásbázis/Saját_fejlesztésű_rendszerek/Helyi_AI_Asszisztens/Módok_és_eszközök.md"
+      ],
+      "expected_entities": [
+        "Obsidian vault",
+        "Tudásbázis mód",
+        "általános modellválaszok"
+      ],
+      "expected_predicates": [
+        "APPLIES_TO",
+        "DESCRIBES"
+      ],
+      "expected_claim_substrings": [
+        "Tudásbázis mode answers based on the content of an Obsidian vault"
+      ],
+      "min_path_hops": 2
+    }
+  ]
+}

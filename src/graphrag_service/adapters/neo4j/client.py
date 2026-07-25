@@ -4,6 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from neo4j import AsyncDriver, AsyncGraphDatabase
+from neo4j.exceptions import Neo4jError
 
 from graphrag_service.domain.graph import GraphSnapshot
 
@@ -197,3 +198,54 @@ class Neo4jGraphAdapter:
                 }
                 async for record in result
             ]
+
+    async def expand_from_entities(
+        self,
+        *,
+        entity_ids: tuple[UUID, ...],
+        max_hops: int,
+        max_paths: int,
+        include_unreviewed: bool,
+    ) -> list[dict[str, Any]]:
+        if max_hops < 1 or max_hops > 4:
+            raise ValueError("max_hops must be between 1 and 4")
+        if max_paths < 1 or max_paths > 51:
+            raise ValueError("max_paths must be between 1 and 51")
+        if not entity_ids:
+            return []
+        query = f"""
+        UNWIND $entity_ids AS seed_id
+        MATCH (seed:Entity {{id: seed_id}})
+        MATCH path = (seed)-[:ENTITY_LINK*1..{max_hops}]-(related:Entity)
+        WHERE seed <> related
+          AND ALL(rel IN relationships(path)
+            WHERE $include_unreviewed OR rel.review_status <> 'unreviewed')
+        WITH path,
+             [node IN nodes(path) | node.id] AS entity_ids,
+             [rel IN relationships(path) | rel.assertion_id] AS assertion_ids,
+             length(path) AS hops
+        WHERE ALL(assertion_id IN assertion_ids WHERE assertion_id IS NOT NULL)
+        RETURN [node IN nodes(path) | node {{.*}}] AS entities,
+               [rel IN relationships(path) | rel {{.*}}] AS assertions,
+               hops
+        ORDER BY hops, entity_ids, assertion_ids
+        LIMIT $max_paths
+        """
+        try:
+            async with self._driver.session(database=self._database) as session:
+                result = await session.run(
+                    query,
+                    entity_ids=[str(entity_id) for entity_id in entity_ids],
+                    include_unreviewed=include_unreviewed,
+                    max_paths=max_paths,
+                )
+                return [
+                    {
+                        "entities": record["entities"],
+                        "assertions": record["assertions"],
+                        "hops": record["hops"],
+                    }
+                    async for record in result
+                ]
+        except Neo4jError as exc:
+            raise RuntimeError("bounded graph expansion failed") from exc

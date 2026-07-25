@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     retrieval_candidate_limit: int = Field(default=40, ge=1, le=500)
     retrieval_max_limit: int = Field(default=50, ge=1, le=200)
     retrieval_rrf_k: int = Field(default=60, ge=1, le=1000)
+    retrieval_entity_limit: int = Field(default=10, ge=1, le=50)
+    retrieval_claim_limit: int = Field(default=20, ge=1, le=100)
+    retrieval_graph_max_hops: int = Field(default=2, ge=1, le=4)
+    retrieval_graph_max_paths: int = Field(default=20, ge=1, le=50)
 
     readiness_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     worker_id: str | None = None

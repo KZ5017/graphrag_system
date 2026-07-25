@@ -21,8 +21,14 @@ from graphrag_service.api.routes.documents import router as document_router
 from graphrag_service.api.routes.extraction import router as extraction_router
 from graphrag_service.api.routes.graph import router as graph_router
 from graphrag_service.api.routes.health import router as health_router
+from graphrag_service.api.routes.operator import (
+    api_router as operator_api_router,
+)
+from graphrag_service.api.routes.operator import (
+    page_router as operator_page_router,
+)
+from graphrag_service.api.routes.phase5_retrieval import router as retrieval_router
 from graphrag_service.api.routes.resolution import router as resolution_router
-from graphrag_service.api.routes.retrieval import router as retrieval_router
 from graphrag_service.api.routes.vaults import router as vault_router
 from graphrag_service.application.readiness import ReadinessService
 from graphrag_service.config import Settings, get_settings
@@ -52,8 +58,8 @@ def create_app(
         app.state.session_factory = create_session_factory(resolved_engine)
         app.state.readiness_service = resolved_readiness
         configure_ingest(app, resolved_settings)
-        configure_retrieval(app, resolved_settings)
         configure_graph(app, resolved_settings)
+        configure_retrieval(app, resolved_settings)
         logger.info("service_started", extra=resolved_settings.safe_summary())
         try:
             yield
@@ -73,6 +79,7 @@ def create_app(
     )
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health_router)
+    app.include_router(operator_page_router)
     v1_router = APIRouter(
         prefix="/v1",
         dependencies=[Depends(require_service_token)],
@@ -83,5 +90,6 @@ def create_app(
     v1_router.include_router(retrieval_router)
     v1_router.include_router(graph_router)
     v1_router.include_router(resolution_router)
+    v1_router.include_router(operator_api_router)
     app.include_router(v1_router)
     return app
