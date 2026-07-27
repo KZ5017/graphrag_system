@@ -141,6 +141,14 @@ Mérendő:
 Az első globális index csak chunk embeddinget készít. Section embedding csak
 akkor aktiválható, ha az evaluation igazolja a hozzáadott értéket.
 
+A structural block chunker 1.1.0 a csak címsort/thematic breaket tartalmazó
+chunkokat `structural_anchor`, a bekezdést, listát, táblázatot, kódot vagy más
+tartalmi blokkot hordozó chunkokat `content_evidence` szereppel tárolja. Mindkét
+szerep indexelhető, de retrieval response-ba önálló evidence-ként csak a
+tartalmi szerep kerülhet. Egyértelmű, egyetlen nem-index dokumentumhoz vezető
+anchor a dokumentum tartalmi chunkjainak korlátos hidratálását indíthatja; a
+heading path minden visszaadott tartalmi chunkon megmarad.
+
 ## 7. LLM extraction költségkontroll
 
 Nem fut automatikusan teljes-vault extraction minden scan után.

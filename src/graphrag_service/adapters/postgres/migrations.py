@@ -1,1 +1,1 @@
-ALEMBIC_HEAD_REVISION = "0008_scope_identifiers_by_vault"
+ALEMBIC_HEAD_REVISION = "0009_chunk_retrieval_roles"

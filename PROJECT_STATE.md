@@ -1,6 +1,6 @@
 # GraphRAG Knowledge Service – project state
 
-Last updated: 2026-07-25
+Last updated: 2026-07-27
 Repository target: `https://github.com/KZ5017/graphrag_system.git`
 
 This is the durable handoff snapshot. It describes what is implemented, what
@@ -38,10 +38,11 @@ partial generic `ügyfél` entity/alias match amplified unrelated SMTP evidence
 through graph and claim channels. Hybrid retrieval now applies a strong
 keyword/semantic consensus gate, permits derived graph/claim expansion only
 from an explicit full-name entity anchor, and returns structured evidence only
-when its current source chunk is visible. The verified Kiskőrös night-outage
-query now returns four night-duty sources and no SMTP, Helpdesk, entity, claim,
-relationship, or path noise. A reasoning-disabled end-to-end Assistant run
-produced a source-grounded night-duty answer without unrelated instructions.
+when its current source chunk is visible. The shorter reviewed Kiskőrös
+night-outage formulation returns only night-duty sources. The longer natural
+formulation can still lack a strong keyword/semantic consensus and then admit
+unrelated content chunks; this remains an explicit Phase 7 precision case, not
+a prompt-level workaround.
 
 A retrieval most dokumentum-koherencia bővítést is alkalmaz: ha az erős
 keyword–semantic konszenzuskapu után pontosan egyetlen nem-index dokumentum
@@ -54,7 +55,18 @@ rangsorolt találat mellé a teljes útmutató 22 további szakaszát kapta meg,
 idegen vagy SMTP-forrás nélkül. A reasoning nélküli Assistant smoke teljes,
 forráshivatkozott beállítási választ adott APN-, telefonszám-, ellenőrzési és
 hibaelhárítási lépésekkel.
-adott APN-, telefonszám-, ellenőrzési és hibaelhárítási lépésekkel.
+
+A chunker 1.1.0 és a `0009_chunk_retrieval_roles` migráció minden chunkot
+kanonikus `structural_anchor` vagy `content_evidence` szereppel lát el. A csak
+címsorból és elválasztóból álló horgony továbbra is keyword/vector seed lehet,
+de önálló végső evidence nem lehet. Ha a rangsorolt horgonyok pontosan egyetlen
+nem-index dokumentumra mutatnak, a backend abból a dokumentumból korlátosan
+hidratálja a tartalmi chunkokat (legfeljebb 32 chunk és 30 000 karakter); a
+content chunkok teljes heading pathja megőrzi a szerkezeti kontextust. A
+Kiskőrös élő próba így már átadja a korábban hiányzó `04:00 előtt` + `minimum
+150 végpont` szabályt, miközben a puszta `ÉRTESÍTENI KELL, HA` címsor nem kerül
+önálló forrásként a modellhez. A nyilvános retrieval/Assistant response schema
+nem változott.
 
 A helyi operátori dashboard a /operator útvonalon elkészült. A tokenvédett
 operátori API kanonikus állapotösszesítést, read-only vault-diff előnézetet,
@@ -172,16 +184,17 @@ retrieval-quality baseline before broader extraction.
 Alembic head:
 
 ```text
-0008_scope_identifiers_by_vault
+0009_chunk_retrieval_roles
 ```
 
-Relevant Phase 4 migrations:
+Relevant schema migrations:
 
 - `0004_phase4_extraction`
 - `0005_phase4_registry_seed`
 - `0006_phase4_resolution_graph`
 - `0007_phase4_resolution_seed`
 - `0008_scope_identifiers_by_vault`
+- `0009_chunk_retrieval_roles`
 
 Implemented job endpoints:
 
@@ -326,10 +339,10 @@ Latest verified gates:
 
 - Ruff format: clean
 - Ruff lint: clean
-- Unit tests: 64 passed
+- Unit tests: 66 passed
 - Integration tests: 7 passed
 - `pip check`: clean
-- Alembic current: `0008_scope_identifiers_by_vault`
+- Alembic current: `0009_chunk_retrieval_roles`
 - Alembic drift: none
 - Docker Compose config: valid
 - Live API/worker build and startup: verified
@@ -353,7 +366,8 @@ At the time of this update:
 - Both LM Studio providers are available on Windows loopback 127.0.0.1:1234:
   qwen/qwen3.5-9b and text-embedding-bge-m3.
 - The canonical PostgreSQL database contains one real read-only pilot vault with
-  18 active Markdown documents and 284 current chunks.
+  18 active Markdown documents and 297 current chunks: 249 `content_evidence`
+  and 48 `structural_anchor`.
 - The 2026-07-25 incremental refresh processed five modified
   Helyi_AI_Asszisztens documents: 28 chunks, 21,975 prompt tokens,
   52,520 completion tokens, 318 valid candidates and 39 fail-closed invalid
@@ -398,6 +412,10 @@ run migrations, ingest, extraction, resolution, and projection again.
 7. The Phase 5 reviewed set has only four positive cases and predates the
    expanded Assistant-document graph. Whole-vault precision, negative queries
    and confidence calibration remain unmeasured.
+   A hosszabb Kiskőrös/02:12/167 modem élő kérdés 2026-07-26-án a helyes pozitív
+   döntési ágat már megkapta, de konszenzus hiányában SMTP- és más témán kívüli
+   content chunkokat is visszaadott. Az anchor-kezelés ezt szándékosan nem
+   próbálja relevanciaszűrésnek álcázni.
 8. The Assistant consumer is implemented and live-smoke verified, but there is
    no version-pinned cross-repository CI contract yet. Its current worktree is
    external to this repository and must be committed separately there.

@@ -6,6 +6,7 @@ from uuid import UUID
 
 RetrievalStrategy = Literal["keyword", "semantic", "hybrid"]
 RetrievalQueryType = Literal["keyword", "semantic", "hybrid", "entity", "graph"]
+ChunkRetrievalRole = Literal["structural_anchor", "content_evidence"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,7 @@ class RetrievalChunk:
     content_sha256: str
     source_uri: str
     obsidian_uri: str | None
+    retrieval_role: ChunkRetrievalRole = "content_evidence"
     keyword_score: float | None = None
     semantic_score: float | None = None
     graph_score: float | None = None

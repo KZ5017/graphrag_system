@@ -232,7 +232,7 @@ Az Assistant és a GraphRAG külön indítható és állítható le.
 
 ## Fázis 7 – Retrieval-minőség és üzemeltetési megerősítés
 
-**Állapot:** következő mérföldkő.
+**Állapot:** folyamatban (2026-07-26).
 
 ### Tervezett scope
 
@@ -245,6 +245,14 @@ Az Assistant és a GraphRAG külön indítható és állítható le.
 - stale, törölt és átnevezett források dashboard- és retrieval-regressziója;
 - retrieval response contract kompatibilitási teszt az Assistant kliensével;
 - mért whole-vault precision a broad extraction scope további bővítése előtt.
+
+Első leszállított minőségi szelet: a chunker 1.1.0 kanonikus
+`structural_anchor`/`content_evidence` szerepet tárol PostgreSQLben. A
+strukturális horgony keresési seed marad, de önálló evidence nem lehet; egyetlen
+nem-index dokumentumra mutató anchor esetén a backend a már létező 32 chunk /
+30 000 karakter korlát alatt csak tartalmi chunkokat hidratál. A Kiskőrös
+döntési dokumentum pozitív `04:00 előtt` ága így visszakerül a contextbe. A
+konszenzus nélküli témán kívüli találatok precision-kezelése továbbra is nyitott.
 
 ### Kilépési feltétel
 

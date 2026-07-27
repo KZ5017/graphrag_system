@@ -333,6 +333,7 @@ class ProjectionStore:
                         "content_sha256": chunk.content_sha256,
                         "parser_version": chunk.parser_version,
                         "chunker_version": chunk.chunker_version,
+                        "retrieval_role": chunk.retrieval_role,
                         "projection_generation": row.generation,
                         "is_current": is_current,
                     }

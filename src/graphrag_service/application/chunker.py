@@ -11,7 +11,8 @@ from graphrag_service.domain.markdown import (
 )
 
 CHUNKER_NAME = "structural-block-chunker"
-CHUNKER_VERSION = "1.0.0"
+CHUNKER_VERSION = "1.1.0"
+STRUCTURAL_BLOCK_TYPES = frozenset({"heading", "thematic_break"})
 
 
 def _sha256(text: str) -> str:
@@ -91,6 +92,7 @@ class StructuralChunker:
             metadata={
                 "heading_path": section.heading_path,
                 "block_ids": [str(block.id) for block in blocks],
+                "retrieval_role": _retrieval_role(blocks),
             },
         )
 
@@ -127,8 +129,15 @@ class StructuralChunker:
                         "heading_path": section.heading_path,
                         "block_ids": [str(block.id)],
                         "hard_split": True,
+                        "retrieval_role": _retrieval_role([block]),
                     },
                 )
             )
             start = proposed_end
         return chunks
+
+
+def _retrieval_role(blocks: list[ParsedBlock]) -> str:
+    if all(block.block_type in STRUCTURAL_BLOCK_TYPES for block in blocks):
+        return "structural_anchor"
+    return "content_evidence"

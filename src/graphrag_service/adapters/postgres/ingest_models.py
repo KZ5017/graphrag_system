@@ -323,6 +323,10 @@ class ChunkModel(Base):
             name="uq_chunks_version_span_chunker",
         ),
         CheckConstraint("char_start >= 0 AND char_end >= char_start", name="valid_span"),
+        CheckConstraint(
+            "retrieval_role IN ('structural_anchor', 'content_evidence')",
+            name="valid_retrieval_role",
+        ),
         Index("ix_chunks_version_ordinal", "document_version_id", "ordinal"),
         Index("ix_chunks_section_ordinal", "section_id", "ordinal"),
         Index("ix_chunks_content_sha256", "content_sha256"),
@@ -345,6 +349,7 @@ class ChunkModel(Base):
     content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     parser_version: Mapped[str] = mapped_column(String(50), nullable=False)
     chunker_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    retrieval_role: Mapped[str] = mapped_column(String(30), nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     token_count: Mapped[int | None] = mapped_column(Integer)
     projection_generation: Mapped[int] = mapped_column(

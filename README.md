@@ -23,9 +23,12 @@ tartalmazza:
 - model-specifikus Qdrant collection, biztonságos aliasváltás és delete
   reconciliation;
 - keyword, semantic és determinisztikus RRF hybrid retrieval;
-- PostgreSQL current-version visszaellenőrzés, exact provenance és
+- PostgreSQL current-version visszaellenőrzés és exact provenance;
 - section-aware szomszédos context chunkok, valamint erős hybrid konszenzushoz
   kötött, nem-index dokumentumokon belüli korlátos fejezetfa-hidratálás;
+- kanonikus `structural_anchor`/`content_evidence` chunk-szerep, amely a
+  címsorhorgonyokat kereshető navigációként megtartja, de önálló válaszforrásként
+  kizárja és egyértelmű dokumentum esetén korlátos tartalmi hidratálást indít;
 - retrieval query audit és verziózott pilot evaluation corpus;
 - kontrollált telecom-core@0.1 PostgreSQL ontológia registry;
 - külön GenerationProvider port és LM Studio Qwen structured-output adapter;

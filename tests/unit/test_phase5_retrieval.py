@@ -165,6 +165,7 @@ class FakeRetrievalStore:
         self.document_context_items = document_context or []
         self.document_context_truncated = document_context_truncated
         self.document_context_seed_ids: list[UUID] = []
+        self.document_context_calls: list[list[UUID]] = []
         self.audit: dict[str, object] | None = None
 
     async def keyword_search(self, *_: object, **__: object) -> list[RetrievalChunk]:
@@ -180,6 +181,7 @@ class FakeRetrievalStore:
         self, seed_ids: list[UUID], **__: object
     ) -> tuple[list[RetrievalChunk], bool]:
         self.document_context_seed_ids = seed_ids
+        self.document_context_calls.append(seed_ids)
         if not seed_ids:
             return [], False
         return self.document_context_items, self.document_context_truncated
@@ -581,6 +583,67 @@ async def test_phase5_does_not_expand_ambiguous_multiple_documents() -> None:
 
     assert store.document_context_seed_ids == []
     assert result.context_chunks == ()
+
+
+async def test_phase5_uses_single_document_anchor_for_content_but_not_as_evidence() -> None:
+    vault_id = uuid4()
+    document_id = uuid4()
+    version_id = uuid4()
+    anchor = replace(
+        make_chunk(uuid4(), "Éjszakás Vezénylés - ÉRTESÍTENI KELL, HA"),
+        vault_id=vault_id,
+        document_id=document_id,
+        document_version_id=version_id,
+        relative_path="noc/ejszakas_vezenyles.md",
+        heading_path=("Éjszakás Vezénylés", "ÉRTESÍTENI KELL, HA"),
+        retrieval_role="structural_anchor",
+    )
+    content = replace(
+        make_chunk(uuid4(), "04:00 előtt minimum 150 végpont esetén értesíteni kell."),
+        vault_id=vault_id,
+        document_id=document_id,
+        document_version_id=version_id,
+        relative_path=anchor.relative_path,
+        heading_path=(
+            "Éjszakás Vezénylés",
+            "ÉRTESÍTENI KELL, HA",
+            "Súlyos üzemzavar 04:00 előtt",
+        ),
+    )
+    store = FakeRetrievalStore(
+        keyword=anchor,
+        semantic=anchor,
+        document_context=[content],
+    )
+    service = Phase5RetrievalService(
+        store=store,  # type: ignore[arg-type]
+        projection_store=FakeProjectionStore(),  # type: ignore[arg-type]
+        vector_index=FakeVectorIndex([(anchor.chunk_id, 0.95)]),  # type: ignore[arg-type]
+        embedding_provider=FakeEmbeddingProvider(),
+        query_planner=DeterministicQueryPlanner(),
+        graph_enricher=FakeEnricher(GraphRetrievalExpansion((), (), (), (), (), False)),  # type: ignore[arg-type]
+        candidate_limit=10,
+        claim_limit=20,
+        max_limit=20,
+        rrf_k=60,
+        chunks_alias="active",
+    )
+
+    result = await service.retrieve(
+        "167 modem állt le 02:12-kor. Mi a teendő?",
+        strategy="hybrid",
+        limit=10,
+        vault_id=vault_id,
+    )
+
+    assert result.chunks == ()
+    assert result.context_chunks == (content,)
+    assert store.document_context_calls[0] == [anchor.chunk_id]
+    assert all(
+        item.retrieval_role == "content_evidence"
+        for item in [*result.chunks, *result.context_chunks]
+    )
+    assert result.truncated is False
 
 
 def test_deterministic_planner_is_small_model_independent() -> None:

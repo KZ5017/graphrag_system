@@ -47,8 +47,9 @@ async def test_phase2_incremental_lifecycle_and_read_only_acceptance(
     note = tmp_path / "knowledge.md"
     note.write_text(
         "# Hálózat\n\nÁttekintés az eljárásról.\n\n"
-        "## Előkészítés\n\nAz ONT előkészítése.\n\n"
-        "## Beállítás\n\nA CMTS [[ONT]] eszközt szolgál ki.\n",
+        "## Eljárás\n\n"
+        "### Előkészítés\n\nAz ONT előkészítése.\n\n"
+        "### Beállítás\n\nA CMTS [[ONT]] eszközt szolgál ki.\n",
         encoding="utf-8",
     )
     before = snapshot(tmp_path)
@@ -85,6 +86,14 @@ async def test_phase2_incremental_lifecycle_and_read_only_acceptance(
         assert chunk_count and chunk_count > 0
         chunks = (await session.scalars(select(ChunkModel))).all()
         assert all(chunk.text for chunk in chunks)
+        roles = {chunk.retrieval_role for chunk in chunks}
+        assert roles == {"structural_anchor", "content_evidence"}
+        assert (
+            next(
+                chunk for chunk in chunks if chunk.retrieval_role == "structural_anchor"
+            ).text.strip()
+            == "## Eljárás"
+        )
 
         retrieval_store = RetrievalStore(sessions)
         hydrated = await retrieval_store.hydrate_current([chunk.id for chunk in chunks])

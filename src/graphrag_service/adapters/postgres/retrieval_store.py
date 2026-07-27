@@ -124,6 +124,7 @@ class RetrievalStore:
                     .where(
                         or_(*conditions),
                         ChunkModel.id.not_in(seed_ids),
+                        ChunkModel.retrieval_role == "content_evidence",
                     )
                     .order_by(ChunkModel.section_id, ChunkModel.ordinal, ChunkModel.id)
                     .limit(len(seed_ids) * neighbor_window * 2)
@@ -138,8 +139,9 @@ class RetrievalStore:
         max_documents: int,
         max_chunks_per_document: int,
         max_total_chars: int,
+        whole_documents: bool = False,
     ) -> tuple[list[RetrievalChunk], bool]:
-        """Hydrate bounded descendants of already accepted document sections."""
+        """Hydrate bounded content evidence from accepted sections or documents."""
         if not seed_ids or max_documents < 1 or max_chunks_per_document < 1 or max_total_chars < 1:
             return [], False
 
@@ -177,6 +179,8 @@ class RetrievalStore:
                     )
                     for char_start, char_end in ranges
                 ]
+                if whole_documents:
+                    conditions = [DocumentVersionModel.id == version_by_document[document_id]]
                 rows = (
                     await session.execute(
                         self._current_chunk_query()
@@ -184,6 +188,7 @@ class RetrievalStore:
                             DocumentVersionModel.id == version_by_document[document_id],
                             or_(*conditions),
                             ChunkModel.id.not_in(seed_ids),
+                            ChunkModel.retrieval_role == "content_evidence",
                         )
                         .order_by(ChunkModel.ordinal, ChunkModel.id)
                         .limit(max_chunks_per_document + 1)
@@ -287,4 +292,5 @@ class RetrievalStore:
             content_sha256=chunk.content_sha256,
             source_uri=source_uri,
             obsidian_uri=obsidian_uri,
+            retrieval_role=chunk.retrieval_role,
         )

@@ -361,6 +361,7 @@ class PostgresIngestStore:
                         content_sha256=item.content_sha256,
                         parser_version=PARSER_VERSION,
                         chunker_version=CHUNKER_VERSION,
+                        retrieval_role=str(item.metadata["retrieval_role"]),
                         metadata_json=metadata,
                     )
                 )

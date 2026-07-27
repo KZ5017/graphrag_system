@@ -188,7 +188,31 @@ class Phase5RetrievalService:
             }
 
         ranked = self._rank(strategy, keyword, semantic, channels, all_chunks)
-        truncated = len(ranked) > limit or graph.truncated or claim_truncated or precision_filtered
+        anchor_candidates = [
+            item
+            for item in ranked
+            if item.retrieval_role == "structural_anchor"
+            and not _is_navigation_document(item.relative_path)
+        ]
+        anchor_document_ids = {item.document_id for item in anchor_candidates}
+        anchor_seed_ids = (
+            [item.chunk_id for item in anchor_candidates] if len(anchor_document_ids) == 1 else []
+        )
+        anchor_context, anchor_context_truncated = await self._store.document_context(
+            anchor_seed_ids,
+            max_documents=self._document_context_max_documents,
+            max_chunks_per_document=self._document_context_max_chunks_per_document,
+            max_total_chars=self._document_context_max_chars,
+            whole_documents=True,
+        )
+        ranked = [item for item in ranked if item.retrieval_role == "content_evidence"]
+        truncated = (
+            len(ranked) > limit
+            or graph.truncated
+            or claim_truncated
+            or precision_filtered
+            or anchor_context_truncated
+        )
         ranked = ranked[:limit]
         document_seed_candidates = [
             item
@@ -215,7 +239,7 @@ class Phase5RetrievalService:
         ranked_ids = {item.chunk_id for item in ranked}
         context_by_id = {
             item.chunk_id: item
-            for item in [*document_context, *section_context]
+            for item in [*anchor_context, *document_context, *section_context]
             if item.chunk_id not in ranked_ids
         }
         context_chunks = sorted(

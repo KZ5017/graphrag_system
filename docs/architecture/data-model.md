@@ -149,6 +149,9 @@ Csak az aktuális vagy építés alatt álló dokumentumverzió szövegét táro
 - forráshű Markdown text;
 - content hash;
 - parser/chunker verzió;
+- kanonikus `retrieval_role`: `structural_anchor` vagy `content_evidence`;
+- a structural anchor kereshető navigációs seed, de nem önálló bizonyító
+  evidence;
 - node type és quality metadata;
 - token count model profile szerint;
 - `search_vector` PostgreSQL `tsvector`;
@@ -385,6 +388,7 @@ heading_path
 content_sha256
 parser_version
 chunker_version
+retrieval_role
 language
 tags
 projection_generation

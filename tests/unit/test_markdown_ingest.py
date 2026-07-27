@@ -78,3 +78,23 @@ def test_structural_chunks_are_source_exact_and_deterministic() -> None:
     assert len(first) > 1
     for chunk in first:
         assert chunk.text == SOURCE[chunk.char_start : chunk.char_end]
+
+
+def test_chunker_classifies_heading_only_sections_as_structural_anchors() -> None:
+    source = (
+        "# Protokoll\n\n"
+        "## Döntési szabályok\n\n"
+        "### Értesítési feltétel\n\n"
+        "A készenlétest 04:00 előtt értesíteni kell.\n"
+    )
+    version_id = uuid4()
+    parsed = SourceMappedMarkdownParser().parse(source, version_id)
+    chunks = StructuralChunker().chunk(source, version_id, parsed.sections, parsed.blocks)
+
+    roles = {
+        tuple(chunk.metadata["heading_path"]): chunk.metadata["retrieval_role"] for chunk in chunks
+    }
+
+    assert roles[("Protokoll",)] == "structural_anchor"
+    assert roles[("Protokoll", "Döntési szabályok")] == "structural_anchor"
+    assert roles[("Protokoll", "Döntési szabályok", "Értesítési feltétel")] == "content_evidence"
