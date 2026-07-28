@@ -9,8 +9,9 @@ integráció lezárult. Az alábbi pontok a további minőség-, adatkezelési �
 1. Lezárva: a Compose csak PostgreSQL/Qdrant/Neo4j és migration runtime.
    Az API és a worker natív WSL-processz, ezért eléri a Windows
    `127.0.0.1:1234` LM Studio-t proxy és hálózati LM Studio binding nélkül.
-2. Helyileg validált host portok: PostgreSQL 55433 (55432: AI Assistant PostgreSQL), Qdrant 6433/6434, Neo4j 7474/7687
-   és API 8080; mindegyik környezeti változóval felülírható.
+2. Helyileg validált host portok: PostgreSQL 56001 (56000: AI Assistant PostgreSQL), Qdrant 6433/6434, Neo4j 7474/7687
+   és API 8080; mindegyik környezeti változóval felülírható. A GraphRAG és az
+   AI Assistant PostgreSQL-portjai szándékosan a Windows által fenntartott `55432–55731` tartományon kívül vannak.
 3. A service token rotációja az első verzióban restarttal történhet-e?
 
 ## Phase 2 során lezárt mérések

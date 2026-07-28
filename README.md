@@ -92,8 +92,11 @@ elérhető marad anélkül, hogy hálózatra kellene megnyitni vagy proxyt telep
 A leállítás: `powershell -ExecutionPolicy Bypass -File .\scripts\stop-system.ps1`.
 
 A host portok kizárólag loopbackre vannak publikálva és az `.env` fájlban
-felülírhatók. A liveness a `http://127.0.0.1:8080/health`, a komponensenkénti readiness
-a `http://127.0.0.1:8080/ready` címen érhető el.
+felülírhatók. Az alap kiosztás: PostgreSQL `56001`, Qdrant `6433/6434`, Neo4j
+`7474/7687`, API `8080`. A PostgreSQL `56001` szándékosan nem a Windows által
+foglalható `55432–55731` porttartományba esik. A liveness a
+`http://127.0.0.1:8080/health`, a komponensenkénti readiness a
+`http://127.0.0.1:8080/ready` címen érhető el.
 
 Lokális ellenőrzés:
 

@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ${GKS_POSTGRES_USER:-graphrag}
       POSTGRES_PASSWORD: ${GKS_POSTGRES_PASSWORD:?set GKS_POSTGRES_PASSWORD}
     ports:
-      - "127.0.0.1:${GKS_POSTGRES_PORT:-55432}:5432"
+      - "127.0.0.1:${GKS_POSTGRES_PORT:-56001}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

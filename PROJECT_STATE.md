@@ -1,6 +1,6 @@
 # GraphRAG Knowledge Service – project state
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 Repository target: `https://github.com/KZ5017/graphrag_system.git`
 
 This is the durable handoff snapshot. It describes what is implemented, what
@@ -379,8 +379,11 @@ At the time of this update:
   c658a5bd9032ec51723e4e599170ebc97f2d426d9527cbfeceedc6d6e6f96361.
 - Qdrant has no pending or failed projections; active dimension is 1024.
 - The operator pending-refresh state is false and contains no documents.
-- GraphRAG uses PostgreSQL host port 55433; the separate AI Assistant PostgreSQL
-  remains on 55432. BoberDetective containers and volumes were not modified.
+- GraphRAG uses PostgreSQL host port 56001; the separate AI Assistant PostgreSQL
+  remains on 56000. This avoids the Windows által fenntartott `55432–55731` host-port tartomány.
+  A full `start-system.ps1 -SkipBuild` smoke on 2026-07-28 verified healthy
+  PostgreSQL, Qdrant and Neo4j, current migration, and ready native API/worker.
+  BoberDetective containers and volumes were not modified.
 - The sibling AI Assistant GraphRAG integration is implemented and live-smoke
   verified, but remains a separate repository and separate Git worktree.
 
