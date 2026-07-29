@@ -75,6 +75,17 @@ scan, Qdrant projection, extraction és resolution jobokat vezérli, továbbá
 külön idempotens rebuild_graph_projection jobot biztosít. A dokumentumok,
 a gráfépítésre váró extraction futások és a művelet nélküli jobnapló külön
 panelekben jelennek meg.
+A kézi **Frissítés** teljesen újraolvassa az operator állapotát. Ha a már
+betöltött UI mögött az API megszűnik, a fetch-hiba piros kapcsolatvesztési
+állapotot, elhalványított „utoljára ismert” adatokat és tiltott műveleti gombokat
+ad; a szolgáltatás visszatérésekor ugyanaz a Frissítés állítja vissza az élő állapotot. Automatikus polling nincs.
+A dashboard a Qdrant szolgáltatás livenessén túl a vektorprojekció használhatóságát
+is ellenőrzi: az aktív embedding profil elvárt fizikai kollekcióját, az aktív
+aliast és a Qdrant pontszámát a PostgreSQL aktuális chunk-számával veti össze.
+Eltéréskor rebuild_required állapotot és külön, tartós
+rebuild_vector_projection helyreállító jobot kínál. Ez nem az inkrementális
+project_chunks frissítés: kontrolláltan újraépíti a Qdrant-projekciót az összes
+aktuális kanonikus chunkból, majd visszaellenőrzi az aliast és a pontszámot.
 
 Az öt módosított Helyi_AI_Asszisztens dokumentum teljes inkrementális
 feldolgozása befejeződött: a scan, Qdrant projection, öt korlátos extraction
@@ -218,6 +229,8 @@ Implemented operator endpoints:
 - GET /v1/operator/vaults/{vault_id}/documents
 - GET /v1/operator/vaults/{vault_id}/pending-refresh
 - POST /v1/operator/vaults/{vault_id}/graph-rebuild
+- POST /v1/operator/vector-rebuild (teljes, PostgreSQL-ből visszaépülő
+  Qdrant-projekció helyreállítása)
 
 Every relationship, claim and graph path returned by retrieval must hydrate
 through active canonical PostgreSQL state and exact evidence on the current
@@ -366,8 +379,7 @@ At the time of this update:
 - Both LM Studio providers are available on Windows loopback 127.0.0.1:1234:
   qwen/qwen3.5-9b and text-embedding-bge-m3.
 - The canonical PostgreSQL database contains one real read-only pilot vault with
-  18 active Markdown documents and 297 current chunks: 249 `content_evidence`
-  and 48 `structural_anchor`.
+  19 active Markdown documents and 290 current chunks.
 - The 2026-07-25 incremental refresh processed five modified
   Helyi_AI_Asszisztens documents: 28 chunks, 21,975 prompt tokens,
   52,520 completion tokens, 318 valid candidates and 39 fail-closed invalid
@@ -377,8 +389,17 @@ At the time of this update:
   assertions and 113 active claims.
 - Neo4j projection generation 2 contains 3,284 snapshot objects with SHA-256
   c658a5bd9032ec51723e4e599170ebc97f2d426d9527cbfeceedc6d6e6f96361.
-- Qdrant has no pending or failed projections; active dimension is 1024.
+- 2026-07-29 vector-projection recovery: the Qdrant persistent volume had no
+  active collection, so semantic retrieval degraded to keyword/graph channels.
+  The new Operator integrity check correctly reported rebuild_required.
+  The controlled rebuild_vector_projection job rebuilt the active
+  gks_chunks__text_embedding_bge_m3_1024__v1 collection from PostgreSQL.
+  The post-rebuild check is ready: 290 expected / 290 actual points, active
+  alias correct, no pending or failed projection work; active dimension is 1024.
 - 2026-07-29 runtime port alignment: Docker Qdrant is host-mapped to 6433/6434. The native WSL API and worker therefore use GKS_QDRANT_URL=http://127.0.0.1:6433 in the local environment; the same explicit value is present in .env.example. After the native runtime restart, GET /ready again reported Qdrant as available.
+- 2026-07-29 API-port startup alignment: `start-system.ps1` validated formában
+  kiolvassa a `.env` `GKS_API_PORT` értékét (hiányzó értéknél 8080), és ezt
+  használja a natív readiness-várakozáshoz, valamint a kijelzett health/ready URL-ekhez.
 - The operator pending-refresh state is false and contains no documents.
 - GraphRAG uses PostgreSQL host port 56001; the separate AI Assistant PostgreSQL
   remains on 56000. This avoids the Windows által fenntartott `55432–55731` host-port tartomány.

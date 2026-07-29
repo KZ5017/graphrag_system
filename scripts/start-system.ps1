@@ -115,11 +115,25 @@ function Wait-ForCompletedService {
     throw "Timed out after $TimeoutSeconds seconds waiting for $Service."
 }
 
+function Get-ConfiguredApiPort {
+    $configuredPort = Invoke-WslCommand -Capture -Command "sed -n 's/^GKS_API_PORT=//p' .env | head -n 1"
+    if ([string]::IsNullOrWhiteSpace($configuredPort)) {
+        return 8080
+    }
+
+    $apiPort = 0
+    if (-not [int]::TryParse($configuredPort.Trim(), [ref]$apiPort) -or $apiPort -lt 1 -or $apiPort -gt 65535) {
+        throw "GKS_API_PORT must be an integer between 1 and 65535."
+    }
+    return $apiPort
+}
+
 function Wait-ForNativeRuntime {
+    param([Parameter(Mandatory)][int]$ApiPort)
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     while ([DateTime]::UtcNow -lt $deadline) {
         $apiHealthy = Invoke-WslCommand -Capture -Command (
-            "curl -fsS --max-time 3 http://127.0.0.1:8080/health >/dev/null 2>&1 " +
+            "curl -fsS --max-time 3 http://127.0.0.1:$ApiPort/health >/dev/null 2>&1 " +
             "&& printf healthy || printf waiting"
         )
         $runtimeStatus = Invoke-WslCommand -Capture -Command "bash scripts/native-runtime.sh status"
@@ -148,6 +162,8 @@ if ($envExists -ne "yes") {
         "change-me value, then run this script again."
     )
 }
+$apiPort = Get-ConfiguredApiPort
+
 
 Write-Host "Validating Docker and Compose configuration..."
 Invoke-WslCommand -Command "docker info >/dev/null"
@@ -182,7 +198,7 @@ Write-Host "Starting native WSL API and worker..."
 Invoke-WslCommand -Command "docker compose rm -sf api worker"
 Invoke-WslCommand -Command "bash scripts/native-runtime.sh stop"
 Invoke-WslCommand -Command "bash scripts/native-runtime.sh start"
-Wait-ForNativeRuntime
+Wait-ForNativeRuntime -ApiPort $apiPort
 Start-Sleep -Seconds $DelaySeconds
 
 Write-Host ""
@@ -190,8 +206,8 @@ Write-Host "GraphRAG Knowledge Service is running."
 Invoke-WslCommand -Command "docker compose ps"
 Invoke-WslCommand -Command "bash scripts/native-runtime.sh status"
 Write-Host ""
-Write-Host "Health: http://127.0.0.1:8080/health"
-Write-Host "Ready:  http://127.0.0.1:8080/ready"
+Write-Host "Health: http://127.0.0.1:$apiPort/health"
+Write-Host "Ready:  http://127.0.0.1:$apiPort/ready"
 Write-Host (
     "PostgreSQL, Qdrant, Neo4j and migrations run in Docker. API and worker run " +
     "natively in WSL, so enabled LM Studio providers use Windows loopback only."

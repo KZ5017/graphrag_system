@@ -16,7 +16,7 @@
     .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;background:#25334a}.ok{color:var(--accent)}.warning{color:var(--warn)}.bad{color:var(--bad)}
     table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px 7px;vertical-align:top}th{color:var(--muted)}code{color:#b9f3e2}
     .scroll{overflow:auto;max-height:360px}.log{white-space:pre-wrap;background:#08101d;border-radius:9px;padding:12px;min-height:48px;color:#bfd0e7}
-    .hint{color:var(--muted);font-size:13px}.hidden{display:none}.right{margin-left:auto}
+    .hint{color:var(--muted);font-size:13px}.hidden{display:none}.right{margin-left:auto}.stale-data{opacity:.55}
   </style>
 </head>
 <body>
@@ -29,7 +29,7 @@
       <label for="token">Service token</label>
       <input id="token" type="password" autocomplete="off" placeholder="GKS_SERVICE_TOKEN">
       <button id="connect" class="primary">Kapcsolódás</button>
-      <span id="connection" class="badge">nincs kapcsolat</span>
+      <span id="connection" class="badge">nincs kapcsolat</span><span id="connectionDetail" class="hint"></span>
     </div>
     <p class="hint">A token csak az aktuális böngészőfül session storage-ában marad.</p>
   </section>
@@ -41,6 +41,15 @@
         <button id="reload" class="right">Frissítés</button>
       </div>
       <div id="components" class="grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <h2>Vektorprojekció</h2>
+        <button id="vectorRebuild" class="warn right">Teljes vektorprojekció újraépítése</button>
+      </div>
+      <div id="vectorProjection"></div>
+      <p class="hint">Normál vault-változás után a „Vektorindex frissítése” gombot használd. Ezt a teljes újraépítést csak akkor használd, ha a felület vektorprojekciós hibát jelez; a Qdrant-projekciót a PostgreSQL kanonikus chunkjaiból építi vissza.</p>
     </section>
 
     <section class="panel">
@@ -86,17 +95,54 @@
   </div>
 </main>
 <script>
-  const state={overview:null,preview:null,pending:null,selectedPaths:null,busy:false};
+  const state={overview:null,preview:null,pending:null,selectedPaths:null,busy:false,connected:false};
   const el=id=>document.getElementById(id);
   const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const token=()=>el("token").value.trim();
   const selectedVault=()=>el("vault").value;
   const log=message=>{el("activity").textContent=message;};
+  const actionButtonIds=["preview","scan","index","extract","rebuild","full","resolve","vectorRebuild"];
+  const staleDataIds=["components","metrics","changes","pendingRuns","jobs","previewState"];
+  function setActionAvailability(){
+    const enabled=state.connected&&!state.busy;
+    actionButtonIds.forEach(id=>el(id).disabled=!enabled);
+    el("vault").disabled=!enabled;
+    el("connect").disabled=state.busy;
+    el("reload").disabled=state.busy;
+  }
+  function setDataStale(stale){staleDataIds.forEach(id=>el(id).classList.toggle("stale-data",stale));}
+  function setConnectionUnavailable(){
+    state.connected=false;
+    el("connection").textContent="szolgáltatás nem elérhető";
+    el("connection").className="badge bad";
+    el("connectionDetail").textContent="Az adatok utoljára ismert állapotot mutatnak.";
+    setDataStale(true);
+    setActionAvailability();
+  }
+  function setConnectionAvailable(readiness){
+    state.connected=true;
+    el("connection").textContent=readiness;
+    el("connection").className="badge "+(readiness==="ready"?"ok":readiness==="degraded"?"warning":"bad");
+    el("connectionDetail").textContent="Élő állapot.";
+    setDataStale(false);
+    setActionAvailability();
+  }
+  async function refreshWorkspace(){
+    await loadOverview();
+    if(selectedVault())await preview();
+  }
 
   async function api(path,options={}){
     const headers=Object.assign({"Authorization":"Bearer "+token()},options.headers||{});
     if(options.body)headers["Content-Type"]="application/json";
-    const response=await fetch(path,Object.assign({},options,{headers}));
+    let response;
+    try{
+      response=await fetch(path,Object.assign({},options,{headers}));
+    }catch(_){
+      const error=new Error("A GraphRAG szolgáltatás nem érhető el.");
+      error.connectionUnavailable=true;
+      throw error;
+    }
     if(!response.ok){
       let detail=response.status+" "+response.statusText;
       try{const body=await response.json();detail=body.detail||detail;}catch(_){}
@@ -107,8 +153,7 @@
 
   async function loadOverview(){
     state.overview=await api("/v1/operator/overview");
-    el("connection").textContent=state.overview.readiness;
-    el("connection").className="badge "+(state.overview.readiness==="ready"?"ok":state.overview.readiness==="degraded"?"warning":"bad");
+    setConnectionAvailable(state.overview.readiness);
     const components=Object.entries(state.overview.components).map(([name,item])=>
       '<div class="metric"><strong class="'+(item.status==="up"?"ok":"bad")+'">'+esc(item.status)+'</strong><span>'+esc(name)+" · "+esc(item.detail)+'</span></div>'
     ).join("");
@@ -116,8 +161,23 @@
     const previous=selectedVault();
     el("vault").innerHTML=state.overview.vaults.map(v=>'<option value="'+esc(v.id)+'">'+esc(v.name)+'</option>').join("");
     if(previous&&state.overview.vaults.some(v=>v.id===previous))el("vault").value=previous;
+    renderVectorProjection();
     renderVault();
     renderJobs();
+  }
+
+  function renderVectorProjection(){
+    const projection=state.overview?.vector_projection;
+    if(!projection)return;
+    const statusClass=projection.status==="ready"?"ok":projection.status==="rebuild_required"?"bad":"warning";
+    const actual=projection.actual_points===null?"—":projection.actual_points;
+    el("vectorProjection").innerHTML='<div class="grid">'+
+      '<div class="metric"><strong class="'+statusClass+'">'+esc(projection.status)+'</strong><span>Vektoros retrieval állapota</span></div>'+
+      '<div class="metric"><strong>'+esc(actual)+' / '+esc(projection.expected_points)+'</strong><span>Qdrant / PostgreSQL aktuális chunk</span></div>'+
+      '</div><p class="'+statusClass+'">'+esc(projection.detail)+'</p>'+
+      '<p class="hint">Elvárt kollekció: <code>'+esc(projection.expected_collection||"—")+
+      '</code> · Aktív alias célja: <code>'+esc(projection.active_collection||"—")+'</code></p>';
+    el("vectorRebuild").disabled=!state.connected||state.busy||projection.recovery_action!=="rebuild_vector_projection";
   }
 
   function renderVault(){
@@ -148,7 +208,7 @@
       el("resolve").disabled=true;
       return;
     }
-    el("resolve").disabled=false;
+    el("resolve").disabled=!state.connected||state.busy;
     el("pendingRuns").innerHTML='<table><thead><tr><th></th><th>Dokumentum</th><th>Kivonatolási futás</th></tr></thead><tbody>'+
       documents.map(document=>'<tr><td><input class="runCheck" type="checkbox" value="'+esc(document.extraction_run_id)+'" checked></td><td>'+esc(document.relative_path)+'</td><td><code>'+esc(document.extraction_run_id)+'</code></td></tr>').join("")+
       '</tbody></table>';
@@ -224,6 +284,11 @@
     return waitJob(accepted.job_id,"Vektorindex");
   }
 
+  async function runVectorRebuild(){
+    const accepted=await postJob("/v1/operator/vector-rebuild",{});
+    return waitJob(accepted.job_id,"Teljes vektorprojekció újraépítése");
+  }
+
   async function runExtraction(paths){
     const documents=await api("/v1/operator/vaults/"+selectedVault()+"/documents");
     const byPath=new Map(documents.filter(d=>d.lifecycle_status==="active").map(d=>[d.relative_path,d]));
@@ -253,16 +318,16 @@
   async function guarded(task){
     if(state.busy)return;
     state.busy=true;
-    document.querySelectorAll("button").forEach(button=>button.disabled=true);
+    setActionAvailability();
     try{
       await task();
       await loadOverview();
       log("A művelet sikeresen befejeződött.");
     }catch(error){
-      log("Hiba: "+error.message);
+      if(error.connectionUnavailable){setConnectionUnavailable();log("Kapcsolat megszakadt: "+error.message);}else log("Hiba: "+error.message);
     }finally{
       state.busy=false;
-      document.querySelectorAll("button").forEach(button=>button.disabled=false);
+      setActionAvailability();
       renderPendingRuns();
     }
   }
@@ -273,11 +338,12 @@
     el("workspace").classList.remove("hidden");
     await preview();
   });
-  el("reload").onclick=()=>guarded(loadOverview);
+  el("reload").onclick=()=>guarded(refreshWorkspace);
   el("vault").onchange=()=>guarded(async()=>{state.selectedPaths=null;renderVault();await preview();});
   el("preview").onclick=()=>guarded(preview);
   el("scan").onclick=()=>guarded(async()=>{state.selectedPaths=selectedPaths();await runScan();await preview();});
   el("index").onclick=()=>guarded(runIndex);
+  el("vectorRebuild").onclick=()=>guarded(runVectorRebuild);
   el("extract").onclick=()=>guarded(async()=>{await runExtraction(selectedPaths());await preview();});
   el("resolve").onclick=()=>guarded(async()=>{
     const runs=[...document.querySelectorAll(".runCheck:checked")].map(input=>input.value);

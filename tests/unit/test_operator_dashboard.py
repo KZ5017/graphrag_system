@@ -87,6 +87,11 @@ class FakeIngestStore:
         return object()
 
 
+class FakeProjectionStore:
+    async def active_embedding_profile(self):
+        return None
+
+
 class FakeOperatorPreview:
     async def preview(self, vault_id):
         return ScanResult(
@@ -128,6 +133,7 @@ def test_operator_page_is_local_shell_and_api_is_token_protected(
         app.state.operator_store = FakeOperatorStore(vault_id)
         app.state.operator_preview = FakeOperatorPreview()
         app.state.ingest_store = FakeIngestStore()
+        app.state.projection_store = FakeProjectionStore()
 
         page = client.get("/operator")
         unauthorized = client.get("/v1/operator/overview")
@@ -145,6 +151,9 @@ def test_operator_page_is_local_shell_and_api_is_token_protected(
     assert "GraphRAG kezelő" in page.text
     assert "Gráfépítésre váró kivonatolások" in page.text
     assert "Legutóbbi tartós jobok" in page.text
+    assert "szolgáltatás nem elérhető" in page.text
+    assert "connectionUnavailable" in page.text
+    assert "refreshWorkspace" in page.text
     assert settings.service_token.get_secret_value() not in page.text
     assert unauthorized.status_code == 401
     assert overview.status_code == 200

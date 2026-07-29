@@ -91,8 +91,21 @@ def build_ingest_handlers(
             "projected_deletes": outcome.projected_deletes,
         }
 
+    async def rebuild_vector_projection(job: ClaimedJob) -> dict[str, object]:
+        if projection_service is None:
+            raise RuntimeError("embedding provider is disabled")
+        outcome = await projection_service.run(vault_id=None, rebuild=True)
+        return {
+            "model_profile_id": str(outcome.model_profile_id),
+            "collection": outcome.collection,
+            "vector_dimension": outcome.vector_dimension,
+            "projected_upserts": outcome.projected_upserts,
+            "rebuild": True,
+        }
+
     return {
         "dummy.noop": dummy_job_handler,
         "scan_vault": scan_vault,
         "project_chunks": project_chunks,
+        "rebuild_vector_projection": rebuild_vector_projection,
     }

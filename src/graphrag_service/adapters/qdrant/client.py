@@ -5,7 +5,11 @@ from uuid import UUID
 
 import httpx
 
-from graphrag_service.ports.vector_index import VectorHit, VectorPoint
+from graphrag_service.ports.vector_index import (
+    VectorCollectionState,
+    VectorHit,
+    VectorPoint,
+)
 
 
 class QdrantError(RuntimeError):
@@ -97,6 +101,53 @@ class QdrantVectorIndex:
             json={"points": [str(point_id) for point_id in point_ids]},
         )
         self._raise(response, "delete points")
+
+    async def delete_collection(self, name: str) -> None:
+        response = await self._client.delete(f"/collections/{name}")
+        if response.status_code == 404:
+            return
+        self._raise(response, "delete collection")
+
+    async def collection_state(
+        self, *, alias: str, expected_collection: str
+    ) -> VectorCollectionState:
+        aliases = await self._client.get("/aliases")
+        self._raise(aliases, "inspect aliases")
+        collection = next(
+            (
+                str(item.get("collection_name"))
+                for item in aliases.json().get("result", {}).get("aliases", [])
+                if item.get("alias_name") == alias
+            ),
+            None,
+        )
+        target = collection or expected_collection
+        description = await self._client.get(f"/collections/{target}")
+        if description.status_code == 404:
+            return VectorCollectionState(
+                alias=alias,
+                collection=collection,
+                expected_collection=expected_collection,
+                exists=False,
+                point_count=None,
+            )
+        self._raise(description, "inspect collection")
+        counted = await self._client.post(
+            f"/collections/{target}/points/count",
+            json={},
+        )
+        self._raise(counted, "count collection points")
+        try:
+            point_count = int(counted.json()["result"]["count"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise QdrantError("Qdrant returned an invalid point count.") from exc
+        return VectorCollectionState(
+            alias=alias,
+            collection=collection,
+            expected_collection=expected_collection,
+            exists=True,
+            point_count=point_count,
+        )
 
     async def search(
         self,

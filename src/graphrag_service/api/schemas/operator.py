@@ -87,13 +87,25 @@ class OperatorVaultResponse(BaseModel):
 class OperatorJobAcceptedResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     job_id: UUID
-    job_type: Literal["rebuild_graph_projection"] = "rebuild_graph_projection"
+    job_type: str
     status: Literal["queued"] = "queued"
+
+
+class OperatorVectorProjectionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["ready", "rebuild_required", "unavailable", "disabled"]
+    detail: str
+    expected_collection: str | None
+    active_collection: str | None
+    expected_points: int
+    actual_points: int | None
+    recovery_action: Literal["rebuild_vector_projection"] | None
 
 
 class OperatorOverviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     readiness: Literal["ready", "degraded", "not_ready"]
     components: dict[str, dict[str, Any]]
+    vector_projection: OperatorVectorProjectionResponse
     vaults: list[OperatorVaultResponse]
     recent_jobs: list[OperatorJobResponse]

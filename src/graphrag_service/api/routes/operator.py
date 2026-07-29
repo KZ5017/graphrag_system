@@ -17,6 +17,7 @@ from graphrag_service.api.schemas.operator import (
     OperatorPendingRefreshResponse,
     OperatorPreviewResponse,
     OperatorVaultResponse,
+    OperatorVectorProjectionResponse,
 )
 
 page_router = APIRouter(tags=["operator"])
@@ -37,8 +38,69 @@ async def operator_overview(request: Request) -> OperatorOverviewResponse:
     readiness, components = await request.app.state.readiness_service.check()
     vaults = await request.app.state.operator_store.vault_states()
     jobs = await request.app.state.operator_store.recent_jobs()
+    expected_points = sum(item.chunk_count for item in vaults)
+    try:
+        profile = await request.app.state.projection_store.active_embedding_profile()
+    except Exception:
+        profile = None
+    if profile is None:
+        vector_projection = OperatorVectorProjectionResponse(
+            status="rebuild_required",
+            detail="Nincs aktív embedding-profil vagy vektorprojekció.",
+            expected_collection=None,
+            active_collection=None,
+            expected_points=expected_points,
+            actual_points=None,
+            recovery_action="rebuild_vector_projection",
+        )
+    elif not request.app.state.settings.embedding_provider_enabled:
+        vector_projection = OperatorVectorProjectionResponse(
+            status="disabled",
+            detail="Az embedding provider le van tiltva.",
+            expected_collection=profile.physical_collection,
+            active_collection=None,
+            expected_points=expected_points,
+            actual_points=None,
+            recovery_action=None,
+        )
+    else:
+        try:
+            state = await request.app.state.vector_index.collection_state(
+                alias=request.app.state.settings.qdrant_chunks_alias,
+                expected_collection=profile.physical_collection,
+            )
+            healthy = (
+                state.exists
+                and state.collection == profile.physical_collection
+                and state.point_count == expected_points
+            )
+            vector_projection = OperatorVectorProjectionResponse(
+                status="ready" if healthy else "rebuild_required",
+                detail=(
+                    "A vektorprojekció egyezik a kanonikus PostgreSQL chunk-állománnyal."
+                    if healthy
+                    else "A Qdrant vektorprojekció hiányzik vagy eltér a PostgreSQL "
+                    "aktuális chunk-állományától; a semantic retrieval nem megbízható."
+                ),
+                expected_collection=profile.physical_collection,
+                active_collection=state.collection,
+                expected_points=expected_points,
+                actual_points=state.point_count,
+                recovery_action=None if healthy else "rebuild_vector_projection",
+            )
+        except Exception:
+            vector_projection = OperatorVectorProjectionResponse(
+                status="unavailable",
+                detail="A Qdrant vektorprojekció állapota nem ellenőrizhető.",
+                expected_collection=profile.physical_collection,
+                active_collection=None,
+                expected_points=expected_points,
+                actual_points=None,
+                recovery_action=None,
+            )
     return OperatorOverviewResponse(
         readiness=readiness,
+        vector_projection=vector_projection,
         components={
             name: {
                 "status": item.status,
@@ -58,6 +120,26 @@ async def operator_overview(request: Request) -> OperatorOverviewResponse:
 
 
 @api_router.post(
+    "/vector-rebuild",
+    response_model=OperatorJobAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def operator_vector_rebuild(request: Request) -> OperatorJobAcceptedResponse:
+    if not request.app.state.settings.embedding_provider_enabled:
+        raise HTTPException(status_code=503, detail="Embedding provider is disabled.")
+    async with SqlAlchemyUnitOfWork(request.app.state.session_factory) as uow:
+        job_id = await uow.jobs.enqueue(
+            "rebuild_vector_projection",
+            {},
+            max_attempts=3,
+        )
+    return OperatorJobAcceptedResponse(
+        job_id=job_id,
+        job_type="rebuild_vector_projection",
+    )
+
+
+@api_router.post(
     "/vaults/{vault_id}/graph-rebuild",
     response_model=OperatorJobAcceptedResponse,
     status_code=status.HTTP_202_ACCEPTED,
@@ -71,7 +153,10 @@ async def operator_graph_rebuild(vault_id: UUID, request: Request) -> OperatorJo
             {"vault_id": str(vault_id)},
             max_attempts=3,
         )
-    return OperatorJobAcceptedResponse(job_id=job_id)
+    return OperatorJobAcceptedResponse(
+        job_id=job_id,
+        job_type="rebuild_graph_projection",
+    )
 
 
 @api_router.get(

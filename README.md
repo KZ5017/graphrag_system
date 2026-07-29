@@ -122,6 +122,19 @@ A scan után a diff-lista helyett a legutóbbi, még nem gráfprojektált scan
 feldolgozási listája marad látható. Ez oldalfrissítés vagy újranyitás után is
 visszaállítható, így a scan és a vektorindex külön futtatása után az extraction
 és a gráfépítés biztonságosan folytatható.
+A **Frissítés** gomb teljesen újraolvassa az operátori állapotot. Ha egy már
+nyitott felület mögött a GraphRAG API leáll, a következő kézi frissítés piros
+kapcsolatvesztési állapotot és „utoljára ismert” jelölést mutat, a műveleti
+gombokat letiltja, majd a szolgáltatás visszatérésekor ugyanazzal a gombbal helyreállítja az élő állapotot.
+
+A **Vektorprojekció** panel a PostgreSQL kanonikus aktuális chunk-számát
+összeveti a Qdrant aktív aliasával és tényleges pontszámával. Ha ez eltér,
+a semantic retrieval nem megbízható, a panel piros **rebuild_required**
+állapotot és a **Teljes vektorprojekció újraépítése** gombot mutatja.
+Ez a tartós, teljes Qdrant-helyreállító job az összes aktuális PostgreSQL
+chunkból építi újra a vektorprojekciót; vault-, PostgreSQL- és Neo4j-adatot nem
+töröl. A **Vektorindex frissítése** ezzel szemben a normál, vault-változás
+utáni inkrementális feldolgozási lépés.
 
 Az operátori felületen a három különböző felelősség elkülönül:
 

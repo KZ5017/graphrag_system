@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from graphrag_service.adapters.postgres.projection_store import (
     ModelProfile,
@@ -44,7 +44,7 @@ class ChunkProjectionService:
         self._batch_size = batch_size
         self._lease_seconds = lease_seconds
 
-    async def run(self, *, vault_id: UUID | None) -> ProjectionOutcome:
+    async def run(self, *, vault_id: UUID | None, rebuild: bool = False) -> ProjectionOutcome:
         await self._provider.healthcheck()
         dimension = await self._provider.probe_dimension()
         info = await self._provider.model_info()
@@ -57,10 +57,13 @@ class ChunkProjectionService:
                 "max_batch_size": info.capabilities.max_batch_size,
             },
         )
+        if rebuild:
+            await self._vectors.delete_collection(profile.physical_collection)
         await self._vectors.ensure_collection(profile.physical_collection, dimension)
         upserts, deletes = await self._store.enqueue_current_chunks(
             profile=profile,
             vault_id=vault_id,
+            rebuild_token=uuid4() if rebuild else None,
         )
 
         projected_upserts = 0

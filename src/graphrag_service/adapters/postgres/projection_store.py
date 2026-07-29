@@ -137,6 +137,7 @@ class ProjectionStore:
         *,
         profile: ModelProfile,
         vault_id: UUID | None,
+        rebuild_token: UUID | None = None,
     ) -> tuple[int, int]:
         """Create idempotent upserts and deletes from one PostgreSQL snapshot."""
         async with self._sessions.begin() as session:
@@ -182,7 +183,11 @@ class ProjectionStore:
                 current_ids = set(await session.scalars(all_current_ids_query))
             inserted_upserts = 0
             for row in current_rows:
-                key = f"qdrant:chunk:{row.id}:{row.projection_generation}:upsert:{profile.id}"
+                rebuild_suffix = f":rebuild:{rebuild_token}" if rebuild_token else ""
+                key = (
+                    f"qdrant:chunk:{row.id}:{row.projection_generation}:upsert:"
+                    f"{profile.id}{rebuild_suffix}"
+                )
                 inserted_id = await session.scalar(
                     insert(ProjectionOutboxModel)
                     .values(
