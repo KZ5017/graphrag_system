@@ -1,6 +1,6 @@
 # GraphRAG Knowledge Service – project state
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 Repository target: `https://github.com/KZ5017/graphrag_system.git`
 
 This is the durable handoff snapshot. It describes what is implemented, what
@@ -378,6 +378,7 @@ At the time of this update:
 - Neo4j projection generation 2 contains 3,284 snapshot objects with SHA-256
   c658a5bd9032ec51723e4e599170ebc97f2d426d9527cbfeceedc6d6e6f96361.
 - Qdrant has no pending or failed projections; active dimension is 1024.
+- 2026-07-29 runtime port alignment: Docker Qdrant is host-mapped to 6433/6434. The native WSL API and worker therefore use GKS_QDRANT_URL=http://127.0.0.1:6433 in the local environment; the same explicit value is present in .env.example. After the native runtime restart, GET /ready again reported Qdrant as available.
 - The operator pending-refresh state is false and contains no documents.
 - GraphRAG uses PostgreSQL host port 56001; the separate AI Assistant PostgreSQL
   remains on 56000. This avoids the Windows által fenntartott `55432–55731` host-port tartomány.
